@@ -22,13 +22,26 @@
         <div class="marca-logo" aria-hidden="true"><span></span><span></span><span></span></div>
         <span class="marca-nombre">Biblioteca</span>
       </div>
+
       <nav class="menu" aria-label="Principal">
         {{ enlace('catalogo', 'Catálogo') }}
+        {% if session.rol == 'bibliotecario' %}
         {{ enlace('prestamos', 'Préstamos') }}
         {{ enlace('vencidos', 'Vencidos') }}
         {{ enlace('multas', 'Multas') }}
         {{ enlace('prestar', 'Nuevo préstamo') }}
+        {% endif %}
       </nav>
+
+      <div class="cuenta">
+        <p class="cuenta-nombre">{{ session.nombre }}</p>
+        <p class="cuenta-rol">{{ 'Bibliotecario' if session.rol == 'bibliotecario' else 'Cliente' }}</p>
+        <a href="{{ url_for('cambiar_contrasena') }}">Cambiar contraseña</a>
+        <form method="post" action="{{ url_for('logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="boton-enlace">Cerrar sesión</button>
+        </form>
+      </div>
     </aside>
 
     <main class="contenido">

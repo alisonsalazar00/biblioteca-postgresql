@@ -424,3 +424,141 @@ td.accion { text-align: right; }
   color: var(--texto-suave);
   font-size: 0.875rem;
 }
+
+/* ---------- Cuenta en el menú lateral ---------- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.cuenta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #34426A;
+}
+
+.cuenta-nombre {
+  margin: 0;
+  padding: 0 12px;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.cuenta-rol {
+  margin: 0 0 8px;
+  padding: 0 12px;
+  color: #8A93AD;
+  font-size: 0.85rem;
+}
+
+.cuenta a,
+.boton-enlace {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #C9D0E2;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.cuenta a:hover,
+.boton-enlace:hover {
+  background: var(--tinta-clara);
+  color: #FFFFFF;
+}
+
+.cuenta a:focus-visible,
+.boton-enlace:focus-visible {
+  outline: 2px solid var(--laton);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .cuenta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .cuenta-rol { margin: 0; }
+  .cuenta a, .boton-enlace { width: auto; }
+}
+
+/* ---------- Campos de texto ---------- */
+.campo input {
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+}
+
+.campo input:focus-visible {
+  outline: 2px solid var(--tinta-clara);
+  outline-offset: 1px;
+}
+
+/* ---------- Pantallas de acceso y de error ---------- */
+.pagina-acceso {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.tarjeta-acceso {
+  width: 100%;
+  max-width: 400px;
+  padding: 36px 32px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie);
+}
+
+.tarjeta-acceso .marca {
+  margin-bottom: 28px;
+  padding: 0;
+}
+
+.tarjeta-acceso .marca-nombre { color: var(--tinta); }
+.tarjeta-acceso h1 { font-size: 1.6rem; }
+.tarjeta-acceso .lede { margin-bottom: 24px; }
+
+.formulario-acceso {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.boton-bloque {
+  width: 100%;
+  padding: 11px 16px;
+}
+
+.enlace-volver {
+  color: var(--tinta);
+  font-weight: 500;
+}

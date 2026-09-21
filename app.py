@@ -1,16 +1,38 @@
 """Aplicación web de la biblioteca (Flask)."""
 import os
+import secrets
+from datetime import timedelta
+from functools import wraps
 
 import psycopg
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from db import call, query
 
 app = Flask(__name__)
-# Necesaria para los mensajes de aviso (flash). Puedes definir SECRET_KEY en el .env
+
+# La clave firma las cookies de sesión. Define SECRET_KEY en el .env con un texto
+# largo y aleatorio; la de abajo solo existe para que funcione en desarrollo.
 app.secret_key = os.getenv("SECRET_KEY", "clave-solo-para-desarrollo")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,   # JavaScript no puede leer la cookie
+    SESSION_COOKIE_SAMESITE="Lax",  # el navegador no la envía en formularios de otros sitios
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
 
 
+# ---------------------------------------------------------------------------
+# Filtros de plantilla
+# ---------------------------------------------------------------------------
 @app.template_filter("fecha")
 def formato_fecha(valor):
     """Muestra una fecha como día/mes/año."""
@@ -29,12 +51,185 @@ def formato_colones(monto):
     return "₡" + f"{monto:,.0f}".replace(",", " ")
 
 
+# ---------------------------------------------------------------------------
+# Seguridad: CSRF, permisos y caché
+# ---------------------------------------------------------------------------
+def generar_csrf():
+    """Token secreto de la sesión que deben traer todos los formularios POST."""
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_hex(16)
+    return session["csrf"]
+
+
+app.jinja_env.globals["csrf_token"] = generar_csrf
+
+
+@app.before_request
+def proteger_csrf():
+    if request.method == "POST":
+        esperado = session.get("csrf", "")
+        recibido = request.form.get("csrf_token", "")
+        if not esperado or not secrets.compare_digest(esperado, recibido):
+            abort(400)
+
+
+@app.after_request
+def sin_cache(respuesta):
+    # Con sesión iniciada, el navegador no guarda las páginas: al cerrar sesión
+    # y usar el botón "atrás" no se ven datos privados.
+    if "cuenta_id" in session:
+        respuesta.headers["Cache-Control"] = "no-store"
+    return respuesta
+
+
+def acceso(*roles):
+    """Exige sesión iniciada y, si se indican roles, que la cuenta tenga alguno."""
+
+    def decorador(vista):
+        @wraps(vista)
+        def envoltura(*args, **kwargs):
+            if "cuenta_id" not in session:
+                siguiente = None
+                if request.method == "GET":
+                    siguiente = request.full_path.rstrip("?")
+                return redirect(url_for("login", next=siguiente))
+            if roles and session.get("rol") not in roles:
+                abort(403)
+            return vista(*args, **kwargs)
+
+        return envoltura
+
+    return decorador
+
+
+def destino_seguro(ruta):
+    """Solo acepta rutas internas, para que 'next' no lleve a otro sitio."""
+    if ruta and ruta.startswith("/") and not ruta.startswith("//") and "\\" not in ruta:
+        return ruta
+    return url_for("catalogo")
+
+
+# ---------------------------------------------------------------------------
+# Páginas de error
+# ---------------------------------------------------------------------------
+@app.errorhandler(400)
+def error_400(_):
+    return render_template(
+        "error.html",
+        titulo="Solicitud no válida",
+        mensaje="La página caducó o la solicitud no es válida. Vuelve a cargarla e inténtalo de nuevo.",
+    ), 400
+
+
+@app.errorhandler(403)
+def error_403(_):
+    return render_template(
+        "error.html",
+        titulo="Sin permiso",
+        mensaje="Tu cuenta no tiene permiso para ver esta página.",
+    ), 403
+
+
+@app.errorhandler(404)
+def error_404(_):
+    return render_template(
+        "error.html",
+        titulo="Página no encontrada",
+        mensaje="La dirección que buscas no existe.",
+    ), 404
+
+
+# ---------------------------------------------------------------------------
+# Inicio y cierre de sesión
+# ---------------------------------------------------------------------------
 @app.route("/")
 def inicio():
-    return redirect(url_for("catalogo"))
+    return redirect(url_for("catalogo" if "cuenta_id" in session else "login"))
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "cuenta_id" in session:
+        return redirect(url_for("catalogo"))
+
+    siguiente = request.args.get("next", "")
+    identificador = ""
+
+    if request.method == "POST":
+        identificador = request.form.get("identificador", "").strip()
+        contrasena = request.form.get("contrasena", "")
+
+        # La función SQL comprueba la contraseña, cuenta los intentos fallidos
+        # y bloquea la cuenta. Aquí solo se interpreta su resultado.
+        fila = call(
+            "SELECT * FROM verificar_credenciales(%s, %s)", (identificador, contrasena)
+        )
+
+        if fila["r_resultado"] == "ok":
+            session.clear()
+            session.permanent = True
+            session["cuenta_id"] = fila["r_cuenta_id"]
+            session["rol"] = fila["r_rol"]
+            session["usuario_id"] = fila["r_usuario_id"]
+            session["nombre"] = fila["r_nombre"]
+            return redirect(destino_seguro(siguiente))
+
+        if fila["r_resultado"] == "bloqueada":
+            minutos = fila["r_minutos"]
+            unidad = "minuto" if minutos == 1 else "minutos"
+            flash(
+                f"Demasiados intentos fallidos. Intenta de nuevo en {minutos} {unidad}.",
+                "error",
+            )
+        elif fila["r_resultado"] == "inactiva":
+            flash("Tu cuenta está desactivada. Contacta al bibliotecario.", "error")
+        else:
+            # Mismo mensaje si el usuario no existe o la contraseña falla,
+            # para no revelar qué cuentas existen.
+            flash("El usuario o la contraseña no son correctos.", "error")
+
+    return render_template("login.html", siguiente=siguiente, identificador=identificador)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    flash("Cerraste sesión.", "exito")
+    return redirect(url_for("login"))
+
+
+@app.route("/cuenta/contrasena", methods=["GET", "POST"])
+@acceso()
+def cambiar_contrasena():
+    if request.method == "POST":
+        actual = request.form.get("actual", "")
+        nueva = request.form.get("nueva", "")
+        confirmar = request.form.get("confirmar", "")
+
+        if nueva != confirmar:
+            flash("La contraseña nueva y su confirmación no coinciden.", "error")
+            return redirect(url_for("cambiar_contrasena"))
+
+        try:
+            call(
+                "SELECT cambiar_contrasena(%s, %s, %s)",
+                (session["cuenta_id"], actual, nueva),
+            )
+        except psycopg.errors.RaiseException as error:
+            flash(error.diag.message_primary, "error")
+            return redirect(url_for("cambiar_contrasena"))
+
+        flash("Contraseña actualizada.", "exito")
+        return redirect(url_for("cambiar_contrasena"))
+
+    return render_template("contrasena.html")
+
+
+# ---------------------------------------------------------------------------
+# Catálogo (todas las cuentas)
+# ---------------------------------------------------------------------------
 @app.route("/catalogo")
+@acceso()
 def catalogo():
     # La vista v_catalogo ya trae autores, categoría y copias por libro
     libros = query("SELECT * FROM v_catalogo ORDER BY titulo")
@@ -46,7 +241,11 @@ def catalogo():
     return render_template("catalogo.html", libros=libros, resumen=resumen)
 
 
+# ---------------------------------------------------------------------------
+# Préstamos y multas (solo bibliotecario)
+# ---------------------------------------------------------------------------
 @app.route("/prestamos")
+@acceso("bibliotecario")
 def prestamos():
     # Los más urgentes (vencidos hace más tiempo) aparecen primero
     filas = query(
@@ -59,6 +258,7 @@ def prestamos():
 
 
 @app.route("/vencidos")
+@acceso("bibliotecario")
 def vencidos():
     filas = query(
         "SELECT * FROM v_prestamos_vencidos ORDER BY dias_retraso DESC, prestamo_id"
@@ -67,6 +267,7 @@ def vencidos():
 
 
 @app.route("/prestar", methods=["GET", "POST"])
+@acceso("bibliotecario")
 def prestar():
     if request.method == "POST":
         try:
@@ -108,6 +309,7 @@ def prestar():
 
 
 @app.route("/devolver/<int:prestamo_id>", methods=["POST"])
+@acceso("bibliotecario")
 def devolver(prestamo_id):
     try:
         fila = call("SELECT devolver_libro(%s) AS retraso", (prestamo_id,))
@@ -133,6 +335,7 @@ def devolver(prestamo_id):
 
 
 @app.route("/multas")
+@acceso("bibliotecario")
 def multas():
     # Primero las pendientes, y dentro de cada grupo las más recientes
     filas = query(
@@ -149,6 +352,7 @@ def multas():
 
 
 @app.route("/multas/<int:multa_id>/pagar", methods=["POST"])
+@acceso("bibliotecario")
 def pagar_multa(multa_id):
     try:
         fila = call("SELECT pagar_multa(%s) AS monto", (multa_id,))

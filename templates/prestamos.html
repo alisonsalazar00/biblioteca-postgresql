@@ -58,6 +58,7 @@
         </td>
         <td class="accion">
           <form method="post" action="{{ url_for('devolver', prestamo_id=f.prestamo_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="volver" value="{{ 'vencidos' if solo_vencidos else 'prestamos' }}">
             <button type="submit" class="boton boton-secundario">Registrar devolución</button>
           </form>

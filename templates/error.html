@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ titulo }} - Biblioteca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="pagina-acceso">
+  <main class="tarjeta-acceso">
+    <div class="marca">
+      <div class="marca-logo" aria-hidden="true"><span></span><span></span><span></span></div>
+      <span class="marca-nombre">Biblioteca</span>
+    </div>
+
+    <h1>{{ titulo }}</h1>
+    <p class="lede">{{ mensaje }}</p>
+    <a class="enlace-volver" href="{{ url_for('inicio') }}">Volver al inicio</a>
+  </main>
+</body>
+</html>

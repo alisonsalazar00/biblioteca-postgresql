@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Cambiar contraseña{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Cambiar contraseña</h1>
+    <p class="lede">Usa al menos 8 caracteres, con letras y números.</p>
+  </div>
+</header>
+
+<form class="formulario" method="post" action="{{ url_for('cambiar_contrasena') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="campo">
+    <label for="actual">Contraseña actual</label>
+    <input id="actual" name="actual" type="password" autocomplete="current-password" required>
+  </div>
+
+  <div class="campo">
+    <label for="nueva">Contraseña nueva</label>
+    <input id="nueva" name="nueva" type="password" autocomplete="new-password" required>
+  </div>
+
+  <div class="campo">
+    <label for="confirmar">Confirmar contraseña nueva</label>
+    <input id="confirmar" name="confirmar" type="password" autocomplete="new-password" required>
+  </div>
+
+  <div>
+    <button type="submit" class="boton boton-primario">Guardar contraseña</button>
+  </div>
+</form>
+{% endblock %}

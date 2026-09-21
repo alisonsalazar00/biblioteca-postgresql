@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión - Biblioteca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="pagina-acceso">
+  <main class="tarjeta-acceso">
+    <div class="marca">
+      <div class="marca-logo" aria-hidden="true"><span></span><span></span><span></span></div>
+      <span class="marca-nombre">Biblioteca</span>
+    </div>
+
+    <h1>Iniciar sesión</h1>
+    <p class="lede">Ingresa con tu correo o con tu nombre de usuario.</p>
+
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+      <div class="avisos">
+        {% for categoria, texto in mensajes %}
+        <p class="aviso aviso-{{ categoria }}" role="status">{{ texto }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    <form class="formulario-acceso" method="post" action="{{ url_for('login', next=siguiente or None) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="campo">
+        <label for="identificador">Correo o usuario</label>
+        <input id="identificador" name="identificador" type="text" autocomplete="username"
+               value="{{ identificador }}" required autofocus>
+      </div>
+
+      <div class="campo">
+        <label for="contrasena">Contraseña</label>
+        <input id="contrasena" name="contrasena" type="password" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="boton boton-primario boton-bloque">Iniciar sesión</button>
+    </form>
+  </main>
+</body>
+</html>
