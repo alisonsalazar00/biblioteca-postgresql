@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo préstamo{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Nuevo préstamo</h1>
+    <p class="lede">Elige quién se lleva el libro y qué copia. El plazo de devolución es de 14 días.</p>
+  </div>
+</header>
+
+{% if usuarios and ejemplares %}
+<form class="formulario" method="post" action="{{ url_for('prestar') }}">
+  <div class="campo">
+    <label for="usuario_id">Usuario</label>
+    <select id="usuario_id" name="usuario_id" required>
+      <option value="" disabled selected>Elige un usuario</option>
+      {% for u in usuarios %}
+      <option value="{{ u.usuario_id }}">{{ u.nombre }} ({{ u.email }})</option>
+      {% endfor %}
+    </select>
+    <p class="ayuda">Solo aparecen los usuarios activos.</p>
+  </div>
+
+  <div class="campo">
+    <label for="ejemplar_id">Ejemplar</label>
+    <select id="ejemplar_id" name="ejemplar_id" required>
+      <option value="" disabled selected>Elige un ejemplar</option>
+      {% for e in ejemplares %}
+      <option value="{{ e.ejemplar_id }}">{{ e.titulo }} ({{ e.codigo_barras }})</option>
+      {% endfor %}
+    </select>
+    <p class="ayuda">Solo aparecen las copias disponibles.</p>
+  </div>
+
+  <div>
+    <button type="submit" class="boton boton-primario">Registrar préstamo</button>
+  </div>
+</form>
+{% else %}
+<p class="vacio">
+  {% if not usuarios %}No hay usuarios activos para registrar un préstamo.{% else %}No hay ejemplares disponibles en este momento.{% endif %}
+</p>
+{% endif %}
+{% endblock %}

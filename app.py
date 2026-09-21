@@ -1,9 +1,14 @@
 """Aplicación web de la biblioteca (Flask)."""
-from flask import Flask, redirect, render_template, url_for
+import os
 
-from db import query
+import psycopg
+from flask import Flask, flash, redirect, render_template, request, url_for
+
+from db import call, query
 
 app = Flask(__name__)
+# Necesaria para los mensajes de aviso (flash). Puedes definir SECRET_KEY en el .env
+app.secret_key = os.getenv("SECRET_KEY", "clave-solo-para-desarrollo")
 
 
 @app.template_filter("fecha")
@@ -53,6 +58,64 @@ def vencidos():
         "SELECT * FROM v_prestamos_vencidos ORDER BY dias_retraso DESC, prestamo_id"
     )
     return render_template("prestamos.html", filas=filas, solo_vencidos=True)
+
+
+@app.route("/prestar", methods=["GET", "POST"])
+def prestar():
+    if request.method == "POST":
+        try:
+            usuario_id = int(request.form["usuario_id"])
+            ejemplar_id = int(request.form["ejemplar_id"])
+        except (KeyError, ValueError):
+            flash("Elige un usuario y un ejemplar para registrar el préstamo.", "error")
+            return redirect(url_for("prestar"))
+
+        try:
+            # Las reglas (usuario activo, ejemplar disponible) las valida la función SQL
+            call("SELECT prestar_libro(%s, %s)", (usuario_id, ejemplar_id))
+        except psycopg.errors.RaiseException as error:
+            flash(error.diag.message_primary, "error")
+            return redirect(url_for("prestar"))
+
+        flash("Préstamo registrado. El libro debe devolverse en 14 días.", "exito")
+        return redirect(url_for("prestamos"))
+
+    usuarios = query(
+        """
+        SELECT usuario_id, nombre || ' ' || apellido AS nombre, email
+        FROM usuarios
+        WHERE activo
+        ORDER BY apellido, nombre
+        """
+    )
+    ejemplares = query(
+        """
+        SELECT e.ejemplar_id, e.codigo_barras, l.titulo
+        FROM ejemplares e
+        JOIN libros l ON l.libro_id = e.libro_id
+        WHERE e.estado = 'disponible'
+        ORDER BY l.titulo, e.codigo_barras
+        """
+    )
+    return render_template("prestar.html", usuarios=usuarios, ejemplares=ejemplares)
+
+
+@app.route("/devolver/<int:prestamo_id>", methods=["POST"])
+def devolver(prestamo_id):
+    try:
+        fila = call("SELECT devolver_libro(%s) AS retraso", (prestamo_id,))
+    except psycopg.errors.RaiseException as error:
+        flash(error.diag.message_primary, "error")
+    else:
+        retraso = fila["retraso"]
+        if retraso:
+            flash(f"Devolución registrada con {formato_dias(retraso)} de retraso.", "exito")
+        else:
+            flash("Devolución registrada. El libro se entregó a tiempo.", "exito")
+
+    # Vuelve a la página desde la que se hizo clic
+    destino = "vencidos" if request.form.get("volver") == "vencidos" else "prestamos"
+    return redirect(url_for(destino))
 
 
 if __name__ == "__main__":

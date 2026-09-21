@@ -35,6 +35,7 @@
         <th>Prestado el</th>
         <th>Vence el</th>
         <th>Estado</th>
+        <th><span class="sr-only">Acciones</span></th>
       </tr>
     </thead>
     <tbody>
@@ -54,6 +55,12 @@
           {% else %}
           <span class="estado al-dia">Al día</span>
           {% endif %}
+        </td>
+        <td class="accion">
+          <form method="post" action="{{ url_for('devolver', prestamo_id=f.prestamo_id) }}">
+            <input type="hidden" name="volver" value="{{ 'vencidos' if solo_vencidos else 'prestamos' }}">
+            <button type="submit" class="boton boton-secundario">Registrar devolución</button>
+          </form>
         </td>
       </tr>
       {% endfor %}

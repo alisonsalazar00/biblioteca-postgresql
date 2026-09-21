@@ -27,3 +27,15 @@ def query(sql, params=None):
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchall()
+
+
+def call(sql, params=None):
+    """Ejecuta una función de PostgreSQL que modifica datos y devuelve su resultado.
+
+    Al terminar sin errores, la conexión guarda (commit) los cambios.
+    Si la función lanza un error, se deshace todo (rollback).
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()

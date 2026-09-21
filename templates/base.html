@@ -26,10 +26,21 @@
         {{ enlace('catalogo', 'Catálogo') }}
         {{ enlace('prestamos', 'Préstamos') }}
         {{ enlace('vencidos', 'Vencidos') }}
+        {{ enlace('prestar', 'Nuevo préstamo') }}
       </nav>
     </aside>
 
     <main class="contenido">
+      {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% if mensajes %}
+        <div class="avisos">
+          {% for categoria, texto in mensajes %}
+          <p class="aviso aviso-{{ categoria }}" role="status">{{ texto }}</p>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endwith %}
+
       {% block content %}{% endblock %}
     </main>
   </div>

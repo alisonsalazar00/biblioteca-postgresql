@@ -326,3 +326,101 @@ td.num { white-space: nowrap; }
   color: var(--agotado);
   font-weight: 500;
 }
+
+/* ---------- Avisos ---------- */
+.aviso {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+}
+
+.aviso-exito {
+  border-color: #B9DCC6;
+  background: #EAF5EE;
+  color: #1F5A38;
+}
+
+.aviso-error {
+  border-color: #E8BDBA;
+  background: #FBEDEC;
+  color: #7D2B2B;
+}
+
+/* ---------- Botones ---------- */
+.boton {
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.boton:focus-visible {
+  outline: 2px solid var(--tinta-clara);
+  outline-offset: 2px;
+}
+
+.boton-primario {
+  background: var(--tinta);
+  color: #FFFFFF;
+}
+.boton-primario:hover { background: var(--tinta-clara); }
+
+.boton-secundario {
+  padding: 6px 12px;
+  border-color: var(--borde);
+  background: var(--superficie);
+  color: var(--tinta);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.boton-secundario:hover {
+  border-color: var(--tinta);
+  background: #F8F9FB;
+}
+
+td.accion { text-align: right; }
+
+/* ---------- Formulario ---------- */
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 520px;
+  padding: 28px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo label { font-weight: 500; }
+
+.campo select {
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+}
+
+.campo select:focus-visible {
+  outline: 2px solid var(--tinta-clara);
+  outline-offset: 1px;
+}
+
+.ayuda {
+  margin: 0;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
