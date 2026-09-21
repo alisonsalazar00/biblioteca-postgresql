@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Multas{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Multas</h1>
+    <p class="lede">
+      {% if n_pendientes %}
+        {{ n_pendientes }} {{ "multa pendiente" if n_pendientes == 1 else "multas pendientes" }}
+        por un total de {{ total_pendiente|colones }}.
+      {% else %}
+        No hay multas pendientes.
+      {% endif %}
+    </p>
+  </div>
+  {% if filas %}
+  <div class="busqueda">
+    <label for="buscar" class="sr-only">Buscar en las multas</label>
+    <input id="buscar" type="search" placeholder="Buscar por usuario o libro" autocomplete="off">
+  </div>
+  {% endif %}
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table id="tabla-multas" data-filtrable>
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th>Libro</th>
+        <th>Retraso</th>
+        <th>Monto</th>
+        <th>Generada el</th>
+        <th>Estado</th>
+        <th><span class="sr-only">Acciones</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>
+          <span class="usuario">{{ f.usuario }}</span>
+          <span class="correo">{{ f.email }}</span>
+        </td>
+        <td class="titulo">{{ f.titulo }}</td>
+        <td class="num">{{ f.dias_retraso|dias }}</td>
+        <td class="num">{{ f.monto|colones }}</td>
+        <td class="num">{{ f.fecha_generada|fecha }}</td>
+        <td>
+          {% if f.pagada %}
+          <span class="estado al-dia">Pagada el {{ f.fecha_pago|fecha }}</span>
+          {% else %}
+          <span class="estado retraso">Pendiente</span>
+          {% endif %}
+        </td>
+        <td class="accion">
+          {% if not f.pagada %}
+          <form method="post" action="{{ url_for('pagar_multa', multa_id=f.multa_id) }}">
+            <button type="submit" class="boton boton-secundario">Registrar pago</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ninguna multa coincide con la búsqueda. Prueba con otro usuario o libro.</p>
+</div>
+{% else %}
+<p class="vacio">Todavía no hay multas. Se generan cuando se devuelve un libro después de su fecha de vencimiento.</p>
+{% endif %}
+{% endblock %}

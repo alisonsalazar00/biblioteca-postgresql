@@ -23,6 +23,12 @@ def formato_dias(cantidad):
     return f"{cantidad} día" if cantidad == 1 else f"{cantidad} días"
 
 
+@app.template_filter("colones")
+def formato_colones(monto):
+    """Muestra un monto como ₡1 200 (espacio como separador de miles)."""
+    return "₡" + f"{monto:,.0f}".replace(",", " ")
+
+
 @app.route("/")
 def inicio():
     return redirect(url_for("catalogo"))
@@ -71,7 +77,8 @@ def prestar():
             return redirect(url_for("prestar"))
 
         try:
-            # Las reglas (usuario activo, ejemplar disponible) las valida la función SQL
+            # Las reglas (usuario activo, sin multas, ejemplar disponible)
+            # las valida la función SQL
             call("SELECT prestar_libro(%s, %s)", (usuario_id, ejemplar_id))
         except psycopg.errors.RaiseException as error:
             flash(error.diag.message_primary, "error")
@@ -109,13 +116,47 @@ def devolver(prestamo_id):
     else:
         retraso = fila["retraso"]
         if retraso:
-            flash(f"Devolución registrada con {formato_dias(retraso)} de retraso.", "exito")
+            mensaje = f"Devolución registrada con {formato_dias(retraso)} de retraso."
+            # Si hubo retraso, el trigger de la base de datos creó una multa
+            multa = query(
+                "SELECT monto FROM multas WHERE prestamo_id = %s", (prestamo_id,)
+            )
+            if multa:
+                mensaje += f" Se generó una multa de {formato_colones(multa[0]['monto'])}."
+            flash(mensaje, "exito")
         else:
             flash("Devolución registrada. El libro se entregó a tiempo.", "exito")
 
     # Vuelve a la página desde la que se hizo clic
     destino = "vencidos" if request.form.get("volver") == "vencidos" else "prestamos"
     return redirect(url_for(destino))
+
+
+@app.route("/multas")
+def multas():
+    # Primero las pendientes, y dentro de cada grupo las más recientes
+    filas = query(
+        "SELECT * FROM v_multas ORDER BY pagada, fecha_generada DESC, multa_id"
+    )
+    pendientes = [f for f in filas if not f["pagada"]]
+    total_pendiente = sum(f["monto"] for f in pendientes)
+    return render_template(
+        "multas.html",
+        filas=filas,
+        n_pendientes=len(pendientes),
+        total_pendiente=total_pendiente,
+    )
+
+
+@app.route("/multas/<int:multa_id>/pagar", methods=["POST"])
+def pagar_multa(multa_id):
+    try:
+        fila = call("SELECT pagar_multa(%s) AS monto", (multa_id,))
+    except psycopg.errors.RaiseException as error:
+        flash(error.diag.message_primary, "error")
+    else:
+        flash(f"Pago registrado: {formato_colones(fila['monto'])}.", "exito")
+    return redirect(url_for("multas"))
 
 
 if __name__ == "__main__":
