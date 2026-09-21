@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% set titulo_pagina = "Préstamos vencidos" if solo_vencidos else "Préstamos activos" %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{{ titulo_pagina }}</h1>
+    <p class="lede">
+      {% if solo_vencidos %}
+        {{ filas|length }} {{ "libro sin devolver" if filas|length == 1 else "libros sin devolver" }} después de su fecha de vencimiento.
+      {% else %}
+        {{ filas|length }} {{ "préstamo" if filas|length == 1 else "préstamos" }} en curso, {{ n_vencidos }} con retraso.
+      {% endif %}
+    </p>
+  </div>
+  {% if filas %}
+  <div class="busqueda">
+    <label for="buscar" class="sr-only">Buscar en los préstamos</label>
+    <input id="buscar" type="search" placeholder="Buscar por libro, usuario o código" autocomplete="off">
+  </div>
+  {% endif %}
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table id="tabla-prestamos" data-filtrable>
+    <thead>
+      <tr>
+        <th>Libro</th>
+        <th>Usuario</th>
+        <th>Ejemplar</th>
+        <th>Prestado el</th>
+        <th>Vence el</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td class="titulo">{{ f.titulo }}</td>
+        <td>
+          <span class="usuario">{{ f.usuario }}</span>
+          <span class="correo">{{ f.email }}</span>
+        </td>
+        <td class="num">{{ f.codigo_barras }}</td>
+        <td class="num">{{ f.fecha_prestamo|fecha }}</td>
+        <td class="num">{{ f.fecha_vencimiento|fecha }}</td>
+        <td>
+          {% if f.dias_retraso > 0 %}
+          <span class="estado retraso">{{ f.dias_retraso|dias }} de retraso</span>
+          {% else %}
+          <span class="estado al-dia">Al día</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ningún préstamo coincide con la búsqueda. Prueba con otro libro, usuario o código.</p>
+</div>
+{% else %}
+<p class="vacio">
+  {% if solo_vencidos %}No hay préstamos vencidos. Todo está al día.{% else %}No hay préstamos activos en este momento.{% endif %}
+</p>
+{% endif %}
+{% endblock %}

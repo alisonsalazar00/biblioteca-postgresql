@@ -1,0 +1,37 @@
+{% macro enlace(endpoint, texto) %}
+<a href="{{ url_for(endpoint) }}"
+   class="{{ 'activo' if request.endpoint == endpoint }}"
+   {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>{{ texto }}</a>
+{% endmacro %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} - Biblioteca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/buscar.js') }}" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="marca">
+        <div class="marca-logo" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span class="marca-nombre">Biblioteca</span>
+      </div>
+      <nav class="menu" aria-label="Principal">
+        {{ enlace('catalogo', 'Catálogo') }}
+        {{ enlace('prestamos', 'Préstamos') }}
+        {{ enlace('vencidos', 'Vencidos') }}
+      </nav>
+    </aside>
+
+    <main class="contenido">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Catálogo{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Catálogo</h1>
+    <p class="lede">
+      {{ resumen.titulos }} títulos, {{ resumen.copias }} copias en total
+      y {{ resumen.disponibles }} disponibles hoy.
+    </p>
+  </div>
+  <div class="busqueda">
+    <label for="buscar" class="sr-only">Buscar en el catálogo</label>
+    <input id="buscar" type="search" placeholder="Buscar por título, autor o categoría" autocomplete="off">
+  </div>
+</header>
+
+{% if libros %}
+<div class="tabla-wrap">
+  <table id="tabla-catalogo" data-filtrable>
+    <thead>
+      <tr>
+        <th>Título</th>
+        <th>Autores</th>
+        <th>Categoría</th>
+        <th>Año</th>
+        <th>Disponibilidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for libro in libros %}
+      <tr>
+        <td class="titulo">{{ libro.titulo }}</td>
+        <td>{{ libro.autores or "Sin autor registrado" }}</td>
+        <td>{{ libro.categoria }}</td>
+        <td class="num">{{ libro.anio_publicacion }}</td>
+        <td>
+          <div class="copias {{ 'agotado' if libro.copias_disponibles == 0 }}">
+            <span class="lomos" aria-hidden="true">
+              {% for i in range(libro.total_copias) %}
+              <i class="lomo {{ 'libre' if i < libro.copias_disponibles else 'ocupado' }}"></i>
+              {% endfor %}
+            </span>
+            <span class="conteo">
+              {% if libro.copias_disponibles == 0 %}Agotado{% else %}{{ libro.copias_disponibles }} de {{ libro.total_copias }}{% endif %}
+            </span>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ningún libro coincide con la búsqueda. Prueba con otro título, autor o categoría.</p>
+</div>
+{% else %}
+<p class="vacio">Todavía no hay libros en el catálogo. Ejecuta los scripts de datos de prueba en la carpeta sql.</p>
+{% endif %}
+{% endblock %}
