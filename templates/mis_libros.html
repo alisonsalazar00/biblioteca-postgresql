@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_tablas_usuario.html" import tabla_prestados, tabla_historial %}
+
+{% block title %}Mis libros{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Mis libros</h1>
+    <p class="lede">
+      {% if prestados %}
+        Tienes {{ prestados|length }} {{ "libro prestado" if prestados|length == 1 else "libros prestados" }}{% if u.prestamos_vencidos %}, {{ u.prestamos_vencidos }} con retraso{% endif %}.
+      {% else %}
+        No tienes libros prestados en este momento.
+      {% endif %}
+    </p>
+  </div>
+</header>
+
+{% if u.prestamos_vencidos %}
+<p class="aviso aviso-error" role="status">
+  Tienes {{ u.prestamos_vencidos }} {{ "libro vencido" if u.prestamos_vencidos == 1 else "libros vencidos" }}.
+  Devuélvelo en la biblioteca lo antes posible: por cada día de retraso se genera una multa.
+</p>
+{% endif %}
+
+{% if u.multas_pendientes %}
+<p class="aviso aviso-error" role="status">
+  Tienes multas pendientes por {{ u.monto_pendiente|colones }}. Mientras las tengas no puedes pedir libros nuevos.
+  <a href="{{ url_for('mis_multas') }}">Ver mis multas</a>
+</p>
+{% endif %}
+
+<dl class="cifras">
+  <div class="cifra">
+    <dd class="cifra-valor">{{ u.total_prestamos }}</dd>
+    <dt class="cifra-etiqueta">Préstamos en total</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ u.prestamos_activos }}</dd>
+    <dt class="cifra-etiqueta">Activos ahora</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ u.prestamos_vencidos }}</dd>
+    <dt class="cifra-etiqueta">Vencidos</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ u.devoluciones_tardias }}</dd>
+    <dt class="cifra-etiqueta">Devoluciones tardías</dt>
+  </div>
+</dl>
+
+<h2>Libros que tengo ahora</h2>
+{% if prestados %}
+{{ tabla_prestados(prestados) }}
+{% else %}
+<p class="lede" style="margin-bottom: 32px;">Cuando pidas un libro en la biblioteca, aparecerá aquí.</p>
+{% endif %}
+
+<h2>Mi historial</h2>
+{% if historial %}
+{{ tabla_historial(historial) }}
+{% else %}
+<p class="vacio">Todavía no has pedido libros prestados.</p>
+{% endif %}
+{% endblock %}

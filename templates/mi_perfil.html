@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Mi perfil{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Mi perfil</h1>
+    <p class="lede">Socio desde el {{ u.fecha_registro|fecha }}.</p>
+  </div>
+  <div class="encabezado-acciones">
+    <a class="boton boton-secundario" href="{{ url_for('cambiar_contrasena') }}">Cambiar contraseña</a>
+  </div>
+</header>
+
+<dl class="datos">
+  <dt>Nombre</dt>
+  <dd>{{ u.nombre_completo }}</dd>
+
+  <dt>Correo</dt>
+  <dd>{{ u.email }} (es también tu nombre de acceso)</dd>
+
+  <dt>Teléfono</dt>
+  <dd>{{ u.telefono or "Sin teléfono registrado" }}</dd>
+
+  <dt>Dirección</dt>
+  <dd>{{ u.direccion or "Sin dirección registrada" }}</dd>
+</dl>
+
+<p class="ayuda">Si tus datos cambiaron, pide al bibliotecario que los actualice.</p>
+{% endblock %}

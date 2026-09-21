@@ -1,0 +1,99 @@
+{# Tablas que se reutilizan en el perfil (bibliotecario) y en "Mis libros" (cliente). #}
+
+{% macro tabla_prestados(prestados, usuario_id=None) %}
+{# Si se indica usuario_id (vista del bibliotecario), cada fila trae el botón de devolución. #}
+<div class="tabla-wrap" style="margin-bottom: 32px;">
+  <table>
+    <thead>
+      <tr>
+        <th>Libro</th>
+        <th>Ejemplar</th>
+        <th>Prestado el</th>
+        <th>Vence el</th>
+        <th>Estado</th>
+        {% if usuario_id %}<th><span class="sr-only">Acciones</span></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in prestados %}
+      <tr>
+        <td>
+          <span class="titulo-fila">{{ p.titulo }}</span>
+          <span class="correo">{{ p.autores or "Sin autor registrado" }}</span>
+        </td>
+        <td class="num">{{ p.codigo_barras }}</td>
+        <td class="num">{{ p.fecha_prestamo|fecha }}</td>
+        <td class="num">{{ p.fecha_vencimiento|fecha }}</td>
+        <td>
+          {% if p.estado == 'Vencido' %}
+          <span class="estado retraso">Vencido, {{ p.dias_retraso|dias }} de retraso</span>
+          {% else %}
+          <span class="estado al-dia">Al día</span>
+          {% endif %}
+        </td>
+        {% if usuario_id %}
+        <td class="accion">
+          <form method="post" action="{{ url_for('devolver', prestamo_id=p.prestamo_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="usuario_id" value="{{ usuario_id }}">
+            <button type="submit" class="boton boton-secundario">Registrar devolución</button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+
+{% macro tabla_historial(historial) %}
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Libro</th>
+        <th>Ejemplar</th>
+        <th>Prestado el</th>
+        <th>Vence el</th>
+        <th>Devuelto el</th>
+        <th>Estado</th>
+        <th>Multa</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in historial %}
+      <tr>
+        <td>
+          <span class="titulo-fila">{{ h.titulo }}</span>
+          <span class="correo">{{ h.autores or "Sin autor registrado" }}</span>
+        </td>
+        <td class="num">{{ h.codigo_barras }}</td>
+        <td class="num">{{ h.fecha_prestamo|fecha }}</td>
+        <td class="num">{{ h.fecha_vencimiento|fecha }}</td>
+        <td class="num">{{ h.fecha_devolucion|fecha or "Sin devolver" }}</td>
+        <td>
+          {% if h.estado == 'Vencido' %}
+          <span class="estado retraso">Vencido, {{ h.dias_retraso|dias }} de retraso</span>
+          {% elif h.estado == 'Devuelto con retraso' %}
+          <span class="estado retraso">Devuelto con {{ h.dias_retraso|dias }} de retraso</span>
+          {% elif h.estado == 'Activo' %}
+          <span class="estado neutro">Activo</span>
+          {% else %}
+          <span class="estado al-dia">Devuelto a tiempo</span>
+          {% endif %}
+        </td>
+        <td class="num">
+          {% if h.multa %}
+            {{ h.multa|colones }}, {{ "pagada" if h.multa_pagada else "pendiente" }}
+          {% else %}
+            Sin multa
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}

@@ -108,11 +108,16 @@ def acceso(*roles):
     return decorador
 
 
+def pagina_inicial():
+    """A dónde llega cada rol después de iniciar sesión."""
+    return url_for("mis_libros" if session.get("rol") == "cliente" else "catalogo")
+
+
 def destino_seguro(ruta):
     """Solo acepta rutas internas, para que 'next' no lleve a otro sitio."""
     if ruta and ruta.startswith("/") and not ruta.startswith("//") and "\\" not in ruta:
         return ruta
-    return url_for("catalogo")
+    return pagina_inicial()
 
 
 # ---------------------------------------------------------------------------
@@ -150,13 +155,13 @@ def error_404(_):
 # ---------------------------------------------------------------------------
 @app.route("/")
 def inicio():
-    return redirect(url_for("catalogo" if "cuenta_id" in session else "login"))
+    return redirect(pagina_inicial() if "cuenta_id" in session else url_for("login"))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "cuenta_id" in session:
-        return redirect(url_for("catalogo"))
+        return redirect(pagina_inicial())
 
     siguiente = request.args.get("next", "")
     identificador = ""
@@ -563,6 +568,72 @@ def restablecer_contrasena(usuario_id):
             "exito",
         )
     return redirect(url_for("perfil_usuario", usuario_id=usuario_id))
+
+
+# ---------------------------------------------------------------------------
+# Vista del cliente
+# Todas estas páginas usan el usuario de la SESIÓN. Ninguna recibe un id por la
+# dirección web, así que un cliente no puede pedir los datos de otra persona.
+# ---------------------------------------------------------------------------
+def usuario_de_sesion():
+    usuario_id = session.get("usuario_id")
+    if usuario_id is None:
+        abort(403)
+    return usuario_id
+
+
+@app.route("/mis-libros")
+@acceso("cliente")
+def mis_libros():
+    usuario_id = usuario_de_sesion()
+    resumen = query("SELECT * FROM v_usuarios_resumen WHERE usuario_id = %s", (usuario_id,))
+    if not resumen:
+        abort(404)
+    historial = query(
+        """
+        SELECT * FROM v_historial_usuario
+        WHERE usuario_id = %s
+        ORDER BY fecha_prestamo DESC, prestamo_id DESC
+        """,
+        (usuario_id,),
+    )
+    prestados = [h for h in historial if h["estado"] in ("Activo", "Vencido")]
+    return render_template(
+        "mis_libros.html", u=resumen[0], historial=historial, prestados=prestados
+    )
+
+
+@app.route("/mis-multas")
+@acceso("cliente")
+def mis_multas():
+    usuario_id = usuario_de_sesion()
+    filas = query(
+        """
+        SELECT * FROM v_multas
+        WHERE usuario_id = %s
+        ORDER BY pagada, fecha_generada DESC, multa_id
+        """,
+        (usuario_id,),
+    )
+    pendientes = [f for f in filas if not f["pagada"]]
+    tarifa = query("SELECT valor FROM parametros WHERE clave = 'multa_por_dia'")
+    return render_template(
+        "mis_multas.html",
+        filas=filas,
+        n_pendientes=len(pendientes),
+        total_pendiente=sum(f["monto"] for f in pendientes),
+        tarifa=tarifa[0]["valor"] if tarifa else None,
+    )
+
+
+@app.route("/mi-perfil")
+@acceso("cliente")
+def mi_perfil():
+    usuario_id = usuario_de_sesion()
+    resumen = query("SELECT * FROM v_usuarios_resumen WHERE usuario_id = %s", (usuario_id,))
+    if not resumen:
+        abort(404)
+    return render_template("mi_perfil.html", u=resumen[0])
 
 
 if __name__ == "__main__":
