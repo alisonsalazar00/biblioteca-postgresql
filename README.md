@@ -326,4 +326,4 @@ Todos los usuarios de prueba usan la contraseña `Cliente2026`. Algunos casos in
 
 ## Autor
 
-Proyecto de portafolio desarrollado por **[Tu nombre]**.
+Proyecto desarrollado por **Alison Salazar Cespedes**.
