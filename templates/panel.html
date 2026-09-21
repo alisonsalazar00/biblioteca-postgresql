@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Panel{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Panel</h1>
+    <p class="lede">Resumen de la biblioteca al {{ hoy|fecha }}.</p>
+  </div>
+  <div class="encabezado-acciones">
+    <a class="boton boton-primario" href="{{ url_for('prestar') }}">Nuevo préstamo</a>
+  </div>
+</header>
+
+<dl class="cifras">
+  <div class="cifra">
+    <dd class="cifra-valor">{{ r.prestamos_activos }}</dd>
+    <dt class="cifra-etiqueta">Préstamos activos</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ r.prestamos_vencidos }}</dd>
+    <dt class="cifra-etiqueta">Vencidos</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ r.ejemplares_disponibles }} de {{ r.ejemplares_total }}</dd>
+    <dt class="cifra-etiqueta">Copias disponibles</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{{ r.monto_pendiente|colones }}</dd>
+    <dt class="cifra-etiqueta">En {{ r.multas_pendientes }} {{ "multa pendiente" if r.multas_pendientes == 1 else "multas pendientes" }}</dt>
+  </div>
+  <div class="cifra">
+    <dd class="cifra-valor">{% if r.pct_a_tiempo is not none %}{{ r.pct_a_tiempo|int }} %{% else %}Sin datos{% endif %}</dd>
+    <dt class="cifra-etiqueta">Devoluciones a tiempo</dt>
+  </div>
+</dl>
+
+<div class="paneles">
+
+  <section class="panel">
+    <h2>Requieren atención</h2>
+    <p class="panel-nota">Los préstamos vencidos hace más tiempo.</p>
+    {% if vencidos %}
+    <ul class="lista-simple">
+      {% for f in vencidos %}
+      <li>
+        <div>
+          <span class="usuario">{{ f.usuario }}</span>
+          <span class="correo">{{ f.titulo }}</span>
+        </div>
+        <span class="estado retraso">{{ f.dias_retraso|dias }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="panel-pie"><a href="{{ url_for('vencidos') }}">Ver los {{ r.prestamos_vencidos }} vencidos</a></p>
+    {% else %}
+    <p class="panel-vacio">No hay préstamos vencidos. Todo está al día.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Usuarios con más retrasos</h2>
+    <p class="panel-nota">Suma de devoluciones tardías y préstamos vencidos.</p>
+    {% if con_retrasos %}
+    <ul class="lista-simple">
+      {% for u in con_retrasos %}
+      <li>
+        <div>
+          <a class="enlace-fila" href="{{ url_for('perfil_usuario', usuario_id=u.usuario_id) }}">{{ u.nombre_completo }}</a>
+          <span class="correo">{{ u.devoluciones_tardias }} {{ "devolución tardía" if u.devoluciones_tardias == 1 else "devoluciones tardías" }}, {{ u.prestamos_vencidos }} {{ "vencido" if u.prestamos_vencidos == 1 else "vencidos" }}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="panel-vacio">Nadie tiene retrasos.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel panel-ancho">
+    <h2>Préstamos por mes</h2>
+    <p class="panel-nota">
+      Últimos 12 meses.
+      {% if mes_actual %}
+        Este mes van {{ mes_actual.prestamos }}
+        {%- if mes_actual.variacion is not none -%}
+          {%- if mes_actual.variacion > 0 %}, {{ mes_actual.variacion }} más que el mes anterior
+          {%- elif mes_actual.variacion < 0 %}, {{ -mes_actual.variacion }} menos que el mes anterior
+          {%- else %}, igual que el mes anterior{% endif -%}
+        {%- endif %}; el mes sigue en curso.
+      {% endif %}
+    </p>
+    <div class="grafico-meses">
+      {% for m in meses %}
+      <div class="mes">
+        <span class="mes-valor">{{ m.prestamos }}</span>
+        <div class="mes-columna">
+          <span class="lomo-barra {{ 'actual' if loop.last }}" style="height: {{ m.altura }}%;"></span>
+        </div>
+        <span class="mes-nombre">{{ m.etiqueta }}{% if m.anio %}<br>{{ m.anio }}{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Libros más prestados</h2>
+    <p class="panel-nota">Los empates comparten posición.</p>
+    {% if libros %}
+    <ol class="barras">
+      {% for l in libros %}
+      <li>
+        <span class="barra-etiqueta"><span class="barra-pos">{{ l.posicion }}.</span> {{ l.titulo }}</span>
+        <span class="barra-valor">{{ l.veces_prestado }} {{ "vez" if l.veces_prestado == 1 else "veces" }}</span>
+        <span class="barra-pista"><span class="barra" style="width: {{ l.ancho }}%;"></span></span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="panel-vacio">Todavía no hay préstamos registrados.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Préstamos por categoría</h2>
+    <p class="panel-nota">Qué parte del total corresponde a cada una.</p>
+    {% if categorias %}
+    <ul class="barras">
+      {% for c in categorias %}
+      <li>
+        <span class="barra-etiqueta">{{ c.categoria }}</span>
+        <span class="barra-valor">{{ c.prestamos }} ({{ c.porcentaje|pct }})</span>
+        <span class="barra-pista"><span class="barra" style="width: {{ (c.porcentaje or 0)|float }}%;"></span></span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="panel-vacio">Todavía no hay categorías registradas.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel panel-ancho">
+    <h2>Actividad reciente</h2>
+    <p class="panel-nota">Los últimos cambios registrados en el sistema.</p>
+    {% if actividad %}
+    <ul class="lista-simple">
+      {% for f in actividad %}
+      <li>
+        <div>
+          <span class="usuario">{{ f.evento }}</span>
+          <span class="correo">{{ f.usuario or "" }}{% if f.libro %}, {{ f.libro }}{% endif %}</span>
+        </div>
+        <div class="derecha">
+          <span class="correo">{{ f.fecha_hora|fechahora }}</span>
+          <span class="correo">{{ f.responsable }}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="panel-pie"><a href="{{ url_for('auditoria') }}">Ver toda la auditoría</a></p>
+    {% else %}
+    <p class="panel-vacio">Todavía no hay actividad registrada.</p>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

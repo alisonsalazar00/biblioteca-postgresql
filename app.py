@@ -2,7 +2,7 @@
 import os
 import re
 import secrets
-from datetime import timedelta, timezone
+from datetime import date, timedelta, timezone
 from functools import wraps
 
 import psycopg
@@ -61,6 +61,12 @@ def formato_dias(cantidad):
 def formato_colones(monto):
     """Muestra un monto como ₡1 200 (espacio como separador de miles)."""
     return "₡" + f"{monto:,.0f}".replace(",", " ")
+
+
+@app.template_filter("pct")
+def formato_porcentaje(valor):
+    """Muestra un porcentaje con coma decimal: 42,9 %."""
+    return f"{(valor or 0):.1f}".replace(".", ",") + " %"
 
 
 # Costa Rica no usa horario de verano, así que un desfase fijo de -6 horas basta
@@ -131,7 +137,7 @@ def acceso(*roles):
 
 def pagina_inicial():
     """A dónde llega cada rol después de iniciar sesión."""
-    return url_for("mis_libros" if session.get("rol") == "cliente" else "catalogo")
+    return url_for("mis_libros" if session.get("rol") == "cliente" else "panel")
 
 
 def destino_seguro(ruta):
@@ -844,6 +850,57 @@ def anular_pago(multa_id):
             return redirect(url_for("multas"))
 
     return render_template("anular_pago.html", m=multa, motivo=motivo)
+
+
+# ---------------------------------------------------------------------------
+# Panel del bibliotecario
+# ---------------------------------------------------------------------------
+MESES_ABREVIADOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+@app.route("/panel")
+@acceso("bibliotecario")
+def panel():
+    # Las cifras y rankings los calculan las vistas de 10_panel.sql
+    resumen = query("SELECT * FROM v_panel_resumen")[0]
+    meses = query("SELECT * FROM v_prestamos_por_mes ORDER BY mes")
+    libros = query("SELECT * FROM v_ranking_libros ORDER BY posicion, titulo LIMIT 5")
+    categorias = query("SELECT * FROM v_uso_categorias ORDER BY prestamos DESC, categoria")
+    vencidos = query("SELECT * FROM v_prestamos_vencidos ORDER BY dias_retraso DESC, prestamo_id LIMIT 5")
+    con_retrasos = query(
+        """
+        SELECT usuario_id, nombre_completo, devoluciones_tardias, prestamos_vencidos
+        FROM v_usuarios_resumen
+        WHERE devoluciones_tardias + prestamos_vencidos > 0
+        ORDER BY devoluciones_tardias + prestamos_vencidos DESC, apellido
+        LIMIT 5
+        """
+    )
+    actividad = query("SELECT * FROM v_auditoria ORDER BY auditoria_id DESC LIMIT 6")
+
+    # Alturas relativas para dibujar las barras (la más alta ocupa el 100 %)
+    maximo_mes = max((m["prestamos"] for m in meses), default=0) or 1
+    for i, m in enumerate(meses):
+        m["altura"] = round(100 * m["prestamos"] / maximo_mes)
+        m["etiqueta"] = MESES_ABREVIADOS[m["mes"].month - 1]
+        m["anio"] = f"{m['mes'].year}" if (i == 0 or m["mes"].month == 1) else ""
+
+    maximo_libro = max((l["veces_prestado"] for l in libros), default=0) or 1
+    for l in libros:
+        l["ancho"] = round(100 * l["veces_prestado"] / maximo_libro)
+
+    return render_template(
+        "panel.html",
+        r=resumen,
+        meses=meses,
+        mes_actual=meses[-1] if meses else None,
+        libros=libros,
+        categorias=categorias,
+        vencidos=vencidos,
+        con_retrasos=con_retrasos,
+        actividad=actividad,
+        hoy=date.today(),
+    )
 
 
 if __name__ == "__main__":
