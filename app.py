@@ -16,9 +16,20 @@ from flask import (
     url_for,
 )
 
-from db import call, query
+from db import call as ejecutar_funcion
+from db import query
 
 app = Flask(__name__)
+
+
+def call(sql, params=None):
+    """Ejecuta una función SQL a nombre de la cuenta con la sesión iniciada.
+
+    Así todos los cambios quedan en la auditoría con su responsable, sin tener
+    que acordarse de pasarlo en cada ruta.
+    """
+    return ejecutar_funcion(sql, params, cuenta_id=session.get("cuenta_id"))
+
 
 # La clave firma las cookies de sesión. Define SECRET_KEY en el .env con un texto
 # largo y aleatorio; la de abajo solo existe para que funcione en desarrollo.

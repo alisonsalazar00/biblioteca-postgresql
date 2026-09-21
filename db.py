@@ -29,13 +29,22 @@ def query(sql, params=None):
             return cur.fetchall()
 
 
-def call(sql, params=None):
+def call(sql, params=None, cuenta_id=None):
     """Ejecuta una función de PostgreSQL que modifica datos y devuelve su resultado.
 
     Al terminar sin errores, la conexión guarda (commit) los cambios.
     Si la función lanza un error, se deshace todo (rollback).
+
+    cuenta_id es la cuenta que realiza la acción. Se guarda en una variable que
+    solo vive durante esta transacción, y los triggers de auditoría la leen para
+    registrar quién hizo el cambio.
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
+            if cuenta_id is not None:
+                cur.execute(
+                    "SELECT set_config('biblioteca.cuenta_id', %s, true)",
+                    (str(cuenta_id),),
+                )
             cur.execute(sql, params)
             return cur.fetchone()
