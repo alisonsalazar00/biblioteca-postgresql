@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva categoría{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Nueva categoría</h1>
+    <p class="lede">Al guardar, vuelves a la página desde la que llegaste.</p>
+  </div>
+</header>
+
+<form class="formulario formulario-ancho" method="post" action="{{ url_for('crear_categoria', volver=volver) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="campo">
+    <label for="nombre">Nombre</label>
+    <input id="nombre" name="nombre" type="text" value="{{ nombre }}" required autofocus>
+  </div>
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">Crear categoría</button>
+    <a class="boton boton-secundario" href="{{ volver }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

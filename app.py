@@ -106,6 +106,15 @@ def proteger_csrf():
             abort(400)
 
 
+@app.context_processor
+def contadores_menu():
+    """Cantidad de solicitudes por revisar, visible en el menú del bibliotecario."""
+    if session.get("rol") == "bibliotecario":
+        fila = query("SELECT COUNT(*) AS n FROM solicitudes WHERE estado = 'pendiente'")
+        return {"solicitudes_pendientes": fila[0]["n"] if fila else 0}
+    return {}
+
+
 @app.after_request
 def sin_cache(respuesta):
     # Con sesión iniciada, el navegador no guarda las páginas: al cerrar sesión
@@ -276,7 +285,17 @@ def catalogo():
         "copias": sum(l["total_copias"] for l in libros),
         "disponibles": sum(l["copias_disponibles"] for l in libros),
     }
-    return render_template("catalogo.html", libros=libros, resumen=resumen)
+    # Si es un cliente, se marca qué libros ya tiene solicitados (pendientes)
+    solicitados = set()
+    if session.get("rol") == "cliente":
+        pendientes = query(
+            "SELECT libro_id FROM solicitudes WHERE usuario_id = %s AND estado = 'pendiente'",
+            (usuario_de_sesion(),),
+        )
+        solicitados = {p["libro_id"] for p in pendientes}
+    return render_template(
+        "catalogo.html", libros=libros, resumen=resumen, solicitados=solicitados
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -679,6 +698,20 @@ ETIQUETAS_CAMPOS = {
     "fecha_devolucion": "Fecha de devolución",
     "pagada": "Pagada",
     "fecha_pago": "Fecha de pago",
+    "isbn": "ISBN",
+    "titulo": "Título",
+    "anio_publicacion": "Año",
+    "categoria_id": "Categoría",
+    "nacionalidad": "Nacionalidad",
+    "fecha_nacimiento": "Nacimiento",
+    "estado": "Estado",
+}
+
+ESTADOS_EJEMPLAR = {
+    "disponible": "Disponible",
+    "prestado": "Prestado",
+    "en_reparacion": "En reparación",
+    "perdido": "Perdido",
 }
 
 
@@ -693,8 +726,14 @@ def _valor_auditoria(valor):
     return str(valor)
 
 
-def detalle_auditoria(f):
-    """Convierte un registro del historial en líneas de texto: qué cambió."""
+def detalle_auditoria(f, categorias=None, codigos=None):
+    """Convierte un registro del historial en líneas de texto: qué cambió.
+
+    categorias: {id: nombre}, para escribir el nombre y no el número de categoría.
+    codigos: {ejemplar_id: código de barras}, para saber de qué copia se trata.
+    """
+    categorias = categorias or {}
+    codigos = codigos or {}
     antes = f["datos_anteriores"] or {}
     despues = f["datos_nuevos"] or {}
     evento = f["evento"]
@@ -718,10 +757,38 @@ def detalle_auditoria(f):
         lineas.append("De pagada a pendiente")
     elif evento == "Usuario creado":
         lineas.append(f"Correo: {despues.get('email', '')}")
+    elif evento == "Libro creado":
+        lineas.append(f"ISBN {despues.get('isbn', '')}")
+    elif evento == "Autor creado":
+        lineas.append(f"{despues.get('nombre', '')} {despues.get('apellido', '')}".strip())
+    elif evento == "Categoría creada":
+        lineas.append(f"Nombre: {despues.get('nombre', '')}")
+    elif evento == "Solicitud enviada":
+        lineas.append("Pendiente de revisión")
+    elif evento == "Solicitud aprobada":
+        lineas.append("Se registró el préstamo")
+    elif evento == "Solicitud rechazada":
+        lineas.append("No se registró préstamo")
+    elif evento == "Solicitud cancelada":
+        lineas.append("La canceló quien la envió")
+    elif evento == "Ejemplar agregado":
+        lineas.append(f"Código {despues.get('codigo_barras', '')}")
+    elif "autores" in despues:
+        # Cambio de autores de un libro (lo anota la función editar_libro)
+        anteriores = ", ".join(antes.get("autores") or []) or "ninguno"
+        nuevos = ", ".join(despues.get("autores") or []) or "ninguno"
+        lineas.append(f"Autores: {anteriores} → {nuevos}")
     elif f["operacion"] == "UPDATE":
+        if f["tabla"] == "ejemplares" and f["registro_id"] in codigos:
+            lineas.append(f"Ejemplar {codigos[f['registro_id']]}")
         for campo, nuevo in despues.items():
             etiqueta = ETIQUETAS_CAMPOS.get(campo, campo)
-            lineas.append(f"{etiqueta}: {_valor_auditoria(antes.get(campo))} → {_valor_auditoria(nuevo)}")
+            anterior = antes.get(campo)
+            if campo == "categoria_id":
+                anterior, nuevo = categorias.get(anterior, anterior), categorias.get(nuevo, nuevo)
+            elif campo == "estado":
+                anterior, nuevo = ESTADOS_EJEMPLAR.get(anterior, anterior), ESTADOS_EJEMPLAR.get(nuevo, nuevo)
+            lineas.append(f"{etiqueta}: {_valor_auditoria(anterior)} → {_valor_auditoria(nuevo)}")
     return lineas
 
 
@@ -741,8 +808,19 @@ def auditoria():
         evento = ""
         filas = query("SELECT * FROM v_auditoria ORDER BY auditoria_id DESC LIMIT 300")
 
+    categorias = {c["categoria_id"]: c["nombre"] for c in query("SELECT categoria_id, nombre FROM categorias")}
+    ids_ejemplares = [f["registro_id"] for f in filas if f["tabla"] == "ejemplares"]
+    codigos = {}
+    if ids_ejemplares:
+        codigos = {
+            e["ejemplar_id"]: e["codigo_barras"]
+            for e in query(
+                "SELECT ejemplar_id, codigo_barras FROM ejemplares WHERE ejemplar_id = ANY(%s)",
+                (ids_ejemplares,),
+            )
+        }
     for f in filas:
-        f["detalle"] = detalle_auditoria(f)
+        f["detalle"] = detalle_auditoria(f, categorias, codigos)
 
     return render_template(
         "auditoria.html", filas=filas, eventos=eventos, evento=evento
@@ -901,6 +979,342 @@ def panel():
         actividad=actividad,
         hoy=date.today(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Gestión del catálogo (solo bibliotecario)
+# ---------------------------------------------------------------------------
+def opciones_libro():
+    """Categorías y autores para los formularios de libros."""
+    categorias = query("SELECT categoria_id, nombre FROM categorias ORDER BY nombre")
+    autores = query(
+        "SELECT autor_id, nombre || ' ' || apellido AS nombre FROM autores ORDER BY apellido, nombre"
+    )
+    return categorias, autores
+
+
+def leer_datos_libro():
+    return {
+        "isbn": request.form.get("isbn", "").strip(),
+        "titulo": request.form.get("titulo", "").strip(),
+        "anio": request.form.get("anio", "").strip(),
+        "categoria_id": request.form.get("categoria_id", type=int),
+        "autores": request.form.getlist("autores", type=int),
+        "copias": request.form.get("copias", "1").strip(),
+    }
+
+
+def entero_o_none(texto):
+    """'' -> None, '1957' -> 1957. Lanza ValueError si no es un número."""
+    return int(texto) if texto else None
+
+
+@app.route("/libros/nuevo", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def crear_libro():
+    datos = {"isbn": "", "titulo": "", "anio": "", "categoria_id": None, "autores": [], "copias": "1"}
+
+    if request.method == "POST":
+        datos = leer_datos_libro()
+        try:
+            anio = entero_o_none(datos["anio"])
+            copias = entero_o_none(datos["copias"]) or 0
+        except ValueError:
+            flash("El año y las copias deben ser números.", "error")
+        else:
+            try:
+                fila = call(
+                    "SELECT crear_libro(%s, %s, %s, %s, %s::int[], %s) AS libro_id",
+                    (datos["isbn"], datos["titulo"], anio, datos["categoria_id"], datos["autores"], copias),
+                )
+            except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+                flash(mensaje_error(error), "error")
+            else:
+                flash("Libro creado.", "exito")
+                return redirect(url_for("detalle_libro", libro_id=fila["libro_id"]))
+
+    categorias, autores = opciones_libro()
+    return render_template(
+        "formulario_libro.html", modo="crear", datos=datos, categorias=categorias, autores=autores
+    )
+
+
+@app.route("/libros/<int:libro_id>")
+@acceso("bibliotecario")
+def detalle_libro(libro_id):
+    libros = query(
+        """
+        SELECT l.*, c.nombre AS categoria
+        FROM libros l
+        JOIN categorias c ON c.categoria_id = l.categoria_id
+        WHERE l.libro_id = %s
+        """,
+        (libro_id,),
+    )
+    if not libros:
+        abort(404)
+    autores = query(
+        """
+        SELECT a.autor_id, a.nombre || ' ' || a.apellido AS nombre
+        FROM libros_autores la
+        JOIN autores a ON a.autor_id = la.autor_id
+        WHERE la.libro_id = %s
+        ORDER BY a.apellido, a.nombre
+        """,
+        (libro_id,),
+    )
+    ejemplares = query(
+        """
+        SELECT e.ejemplar_id, e.codigo_barras, e.estado,
+               (SELECT COUNT(*) FROM prestamos p
+                 WHERE p.ejemplar_id = e.ejemplar_id) AS total_prestamos,
+               (SELECT u.nombre || ' ' || u.apellido
+                  FROM prestamos p
+                  JOIN usuarios u ON u.usuario_id = p.usuario_id
+                 WHERE p.ejemplar_id = e.ejemplar_id
+                   AND p.fecha_devolucion IS NULL) AS prestado_a
+        FROM ejemplares e
+        WHERE e.libro_id = %s
+        ORDER BY e.codigo_barras
+        """,
+        (libro_id,),
+    )
+    return render_template(
+        "libro.html",
+        l=libros[0],
+        autores=autores,
+        ejemplares=ejemplares,
+        estados=ESTADOS_EJEMPLAR,
+        total_prestamos=sum(e["total_prestamos"] for e in ejemplares),
+    )
+
+
+@app.route("/libros/<int:libro_id>/editar", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def editar_libro(libro_id):
+    libros = query("SELECT * FROM libros WHERE libro_id = %s", (libro_id,))
+    if not libros:
+        abort(404)
+    libro = libros[0]
+
+    if request.method == "POST":
+        datos = leer_datos_libro()
+        try:
+            anio = entero_o_none(datos["anio"])
+        except ValueError:
+            flash("El año debe ser un número.", "error")
+        else:
+            try:
+                call(
+                    "SELECT editar_libro(%s, %s, %s, %s, %s, %s::int[])",
+                    (libro_id, datos["isbn"], datos["titulo"], anio, datos["categoria_id"], datos["autores"]),
+                )
+            except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+                flash(mensaje_error(error), "error")
+            else:
+                flash("Libro actualizado.", "exito")
+                return redirect(url_for("detalle_libro", libro_id=libro_id))
+    else:
+        actuales = query("SELECT autor_id FROM libros_autores WHERE libro_id = %s", (libro_id,))
+        datos = {
+            "isbn": libro["isbn"],
+            "titulo": libro["titulo"],
+            "anio": str(libro["anio_publicacion"] or ""),
+            "categoria_id": libro["categoria_id"],
+            "autores": [a["autor_id"] for a in actuales],
+            "copias": "",
+        }
+
+    categorias, autores = opciones_libro()
+    return render_template(
+        "formulario_libro.html",
+        modo="editar",
+        libro=libro,
+        datos=datos,
+        categorias=categorias,
+        autores=autores,
+    )
+
+
+@app.route("/libros/<int:libro_id>/copias", methods=["POST"])
+@acceso("bibliotecario")
+def agregar_copias(libro_id):
+    try:
+        cantidad = int(request.form.get("cantidad", ""))
+    except ValueError:
+        flash("La cantidad de copias debe ser un número.", "error")
+    else:
+        try:
+            call("SELECT agregar_ejemplares(%s, %s)", (libro_id, cantidad))
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            mensaje = "Se agregó 1 copia." if cantidad == 1 else f"Se agregaron {cantidad} copias."
+            flash(mensaje, "exito")
+    return redirect(url_for("detalle_libro", libro_id=libro_id))
+
+
+@app.route("/ejemplares/<int:ejemplar_id>/estado", methods=["POST"])
+@acceso("bibliotecario")
+def estado_ejemplar(ejemplar_id):
+    filas = query("SELECT libro_id FROM ejemplares WHERE ejemplar_id = %s", (ejemplar_id,))
+    if not filas:
+        abort(404)
+    libro_id = filas[0]["libro_id"]
+
+    try:
+        call(
+            "SELECT cambiar_estado_ejemplar(%s, %s, %s)",
+            (ejemplar_id, request.form.get("estado", ""), request.form.get("motivo", "").strip()),
+        )
+    except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+        flash(mensaje_error(error), "error")
+    else:
+        flash("Estado del ejemplar actualizado. Quedó registrado en el historial.", "exito")
+    return redirect(url_for("detalle_libro", libro_id=libro_id))
+
+
+@app.route("/autores/nuevo", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def crear_autor():
+    volver = destino_seguro(request.args.get("volver", ""))
+    datos = {"nombre": "", "apellido": "", "nacionalidad": "", "fecha_nacimiento": ""}
+
+    if request.method == "POST":
+        datos = {campo: request.form.get(campo, "").strip() for campo in datos}
+        try:
+            call(
+                "SELECT crear_autor(%s, %s, %s, %s::date)",
+                (datos["nombre"], datos["apellido"], datos["nacionalidad"], datos["fecha_nacimiento"] or None),
+            )
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError, psycopg.errors.DataError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            flash("Autor creado.", "exito")
+            return redirect(volver)
+
+    return render_template("formulario_autor.html", datos=datos, volver=volver)
+
+
+@app.route("/categorias/nueva", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def crear_categoria():
+    volver = destino_seguro(request.args.get("volver", ""))
+    nombre = ""
+
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        try:
+            call("SELECT crear_categoria(%s)", (nombre,))
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            flash("Categoría creada.", "exito")
+            return redirect(volver)
+
+    return render_template("formulario_categoria.html", nombre=nombre, volver=volver)
+
+
+# ---------------------------------------------------------------------------
+# Solicitudes de préstamo
+# El cliente solicita; el bibliotecario aprueba o rechaza. Quién es cada uno lo
+# verifica también la base de datos, con la cuenta de la sesión.
+# ---------------------------------------------------------------------------
+@app.route("/libros/<int:libro_id>/solicitar", methods=["POST"])
+@acceso("cliente")
+def solicitar(libro_id):
+    try:
+        call("SELECT solicitar_prestamo(%s, %s)", (usuario_de_sesion(), libro_id))
+    except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+        flash(mensaje_error(error), "error")
+        return redirect(url_for("catalogo"))
+
+    flash("Solicitud enviada. El bibliotecario la revisará.", "exito")
+    return redirect(url_for("mis_solicitudes"))
+
+
+@app.route("/mis-solicitudes")
+@acceso("cliente")
+def mis_solicitudes():
+    filas = query(
+        "SELECT * FROM v_solicitudes WHERE usuario_id = %s ORDER BY fecha_solicitud DESC, solicitud_id DESC",
+        (usuario_de_sesion(),),
+    )
+    n_pendientes = sum(1 for f in filas if f["estado"] == "pendiente")
+    return render_template("mis_solicitudes.html", filas=filas, n_pendientes=n_pendientes)
+
+
+@app.route("/solicitudes/<int:solicitud_id>/cancelar", methods=["POST"])
+@acceso("cliente")
+def cancelar_solicitud(solicitud_id):
+    try:
+        call("SELECT cancelar_solicitud(%s, %s)", (solicitud_id, usuario_de_sesion()))
+    except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+        flash(mensaje_error(error), "error")
+    else:
+        flash("Solicitud cancelada.", "exito")
+    return redirect(url_for("mis_solicitudes"))
+
+
+@app.route("/solicitudes")
+@acceso("bibliotecario")
+def lista_solicitudes():
+    # Las pendientes primero (la más antigua arriba); luego las resueltas, la más reciente arriba
+    filas = query(
+        """
+        SELECT * FROM v_solicitudes
+        ORDER BY (estado <> 'pendiente'),
+                 CASE WHEN estado = 'pendiente' THEN fecha_solicitud END,
+                 fecha_solicitud DESC
+        LIMIT 100
+        """
+    )
+    n_pendientes = sum(1 for f in filas if f["estado"] == "pendiente")
+    return render_template("solicitudes.html", filas=filas, n_pendientes=n_pendientes)
+
+
+@app.route("/solicitudes/<int:solicitud_id>/aprobar", methods=["POST"])
+@acceso("bibliotecario")
+def aprobar_solicitud(solicitud_id):
+    try:
+        call("SELECT aprobar_solicitud(%s)", (solicitud_id,))
+    except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+        flash(mensaje_error(error), "error")
+    else:
+        datos = query(
+            """
+            SELECT s.usuario, s.titulo, v.codigo_barras
+            FROM v_solicitudes s
+            JOIN v_prestamos_activos v ON v.prestamo_id = s.prestamo_id
+            WHERE s.solicitud_id = %s
+            """,
+            (solicitud_id,),
+        )
+        if datos:
+            d = datos[0]
+            flash(
+                f"Solicitud aprobada. Se registró el préstamo de \"{d['titulo']}\" "
+                f"({d['codigo_barras']}): entrégalo a {d['usuario']}.",
+                "exito",
+            )
+        else:
+            flash("Solicitud aprobada.", "exito")
+    return redirect(url_for("lista_solicitudes"))
+
+
+@app.route("/solicitudes/<int:solicitud_id>/rechazar", methods=["POST"])
+@acceso("bibliotecario")
+def rechazar_solicitud(solicitud_id):
+    try:
+        call(
+            "SELECT rechazar_solicitud(%s, %s)",
+            (solicitud_id, request.form.get("motivo", "").strip()),
+        )
+    except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+        flash(mensaje_error(error), "error")
+    else:
+        flash("Solicitud rechazada. La persona verá el motivo.", "exito")
+    return redirect(url_for("lista_solicitudes"))
 
 
 if __name__ == "__main__":

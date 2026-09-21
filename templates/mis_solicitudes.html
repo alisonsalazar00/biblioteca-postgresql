@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Mis solicitudes{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Mis solicitudes</h1>
+    <p class="lede">
+      {% if n_pendientes %}
+        Tienes {{ n_pendientes }} de 3 solicitudes pendientes de revisión.
+      {% else %}
+        No tienes solicitudes pendientes. Puedes pedir libros desde el catálogo.
+      {% endif %}
+    </p>
+  </div>
+  <div class="encabezado-acciones">
+    <a class="boton boton-secundario" href="{{ url_for('catalogo') }}">Ir al catálogo</a>
+  </div>
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Libro</th>
+        <th>Enviada el</th>
+        <th>Estado</th>
+        <th><span class="sr-only">Acciones</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>
+          <span class="titulo-fila">{{ f.titulo }}</span>
+          <span class="correo">{{ f.autores or "Sin autor registrado" }}</span>
+        </td>
+        <td class="num">{{ f.fecha_solicitud|fechahora }}</td>
+        <td>
+          {% if f.estado == 'pendiente' %}
+          <span class="estado neutro">En revisión</span>
+          {% elif f.estado == 'aprobada' %}
+          <span class="estado al-dia">Aprobada</span>
+          <span class="nota-fila">Ya está registrado a tu nombre. Pasa por la biblioteca a recogerlo.</span>
+          {% elif f.estado == 'rechazada' %}
+          <span class="estado retraso">Rechazada</span>
+          <span class="nota-fila">Motivo: {{ f.motivo_rechazo }}</span>
+          {% else %}
+          <span class="estado neutro">Cancelada</span>
+          {% endif %}
+        </td>
+        <td class="accion">
+          {% if f.estado == 'pendiente' %}
+          <form method="post" action="{{ url_for('cancelar_solicitud', solicitud_id=f.solicitud_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="boton boton-secundario">Cancelar solicitud</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="vacio">Todavía no has solicitado libros. Puedes hacerlo desde el catálogo con el botón "Solicitar".</p>
+{% endif %}
+{% endblock %}

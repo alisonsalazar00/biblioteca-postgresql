@@ -13,6 +13,13 @@
   </div>
 </header>
 
+{% if solicitudes_pendientes %}
+<p class="aviso" role="status">
+  Hay {{ solicitudes_pendientes }} {{ "solicitud pendiente" if solicitudes_pendientes == 1 else "solicitudes pendientes" }} de revisión.
+  <a href="{{ url_for('lista_solicitudes') }}">Revisarlas</a>
+</p>
+{% endif %}
+
 <dl class="cifras">
   <div class="cifra">
     <dd class="cifra-valor">{{ r.prestamos_activos }}</dd>

@@ -11,9 +11,14 @@
       y {{ resumen.disponibles }} disponibles hoy.
     </p>
   </div>
-  <div class="busqueda">
-    <label for="buscar" class="sr-only">Buscar en el catálogo</label>
-    <input id="buscar" type="search" placeholder="Buscar por título, autor o categoría" autocomplete="off">
+  <div class="encabezado-acciones">
+    <div class="busqueda">
+      <label for="buscar" class="sr-only">Buscar en el catálogo</label>
+      <input id="buscar" type="search" placeholder="Buscar por título, autor o categoría" autocomplete="off">
+    </div>
+    {% if session.rol == 'bibliotecario' %}
+    <a class="boton boton-primario" href="{{ url_for('crear_libro') }}">Nuevo libro</a>
+    {% endif %}
   </div>
 </header>
 
@@ -27,12 +32,19 @@
         <th>Categoría</th>
         <th>Año</th>
         <th>Disponibilidad</th>
+        {% if session.rol == 'cliente' %}<th><span class="sr-only">Solicitar</span></th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for libro in libros %}
       <tr>
-        <td class="titulo">{{ libro.titulo }}</td>
+        <td class="titulo">
+          {% if session.rol == 'bibliotecario' %}
+          <a class="titulo-enlace" href="{{ url_for('detalle_libro', libro_id=libro.libro_id) }}">{{ libro.titulo }}</a>
+          {% else %}
+          {{ libro.titulo }}
+          {% endif %}
+        </td>
         <td>{{ libro.autores or "Sin autor registrado" }}</td>
         <td>{{ libro.categoria }}</td>
         <td class="num">{{ libro.anio_publicacion }}</td>
@@ -44,10 +56,22 @@
               {% endfor %}
             </span>
             <span class="conteo">
-              {% if libro.copias_disponibles == 0 %}Agotado{% else %}{{ libro.copias_disponibles }} de {{ libro.total_copias }}{% endif %}
+              {% if libro.total_copias == 0 %}Sin copias{% elif libro.copias_disponibles == 0 %}Agotado{% else %}{{ libro.copias_disponibles }} de {{ libro.total_copias }}{% endif %}
             </span>
           </div>
         </td>
+        {% if session.rol == 'cliente' %}
+        <td class="accion">
+          {% if libro.libro_id in solicitados %}
+          <span class="estado neutro">Solicitud enviada</span>
+          {% elif libro.copias_disponibles > 0 %}
+          <form method="post" action="{{ url_for('solicitar', libro_id=libro.libro_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="boton boton-secundario">Solicitar</button>
+          </form>
+          {% endif %}
+        </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>
@@ -55,6 +79,6 @@
   <p id="sin-resultados" class="vacio" hidden>Ningún libro coincide con la búsqueda. Prueba con otro título, autor o categoría.</p>
 </div>
 {% else %}
-<p class="vacio">Todavía no hay libros en el catálogo. Ejecuta los scripts de datos de prueba en la carpeta sql.</p>
+<p class="vacio">Todavía no hay libros en el catálogo.{% if session.rol == 'bibliotecario' %} Agrega el primero con el botón "Nuevo libro".{% endif %}</p>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitudes{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Solicitudes</h1>
+    <p class="lede">
+      {% if n_pendientes %}
+        {{ n_pendientes }} {{ "solicitud pendiente" if n_pendientes == 1 else "solicitudes pendientes" }} de revisión, las más antiguas primero.
+      {% else %}
+        No hay solicitudes pendientes.
+      {% endif %}
+    </p>
+  </div>
+  {% if filas %}
+  <div class="busqueda">
+    <label for="buscar" class="sr-only">Buscar solicitudes</label>
+    <input id="buscar" type="search" placeholder="Buscar por persona o libro" autocomplete="off">
+  </div>
+  {% endif %}
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table id="tabla-solicitudes" data-filtrable>
+    <thead>
+      <tr>
+        <th>Persona</th>
+        <th>Libro</th>
+        <th>Enviada el</th>
+        <th>Estado</th>
+        <th><span class="sr-only">Acciones</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>
+          <a class="enlace-fila" href="{{ url_for('perfil_usuario', usuario_id=f.usuario_id) }}">{{ f.usuario }}</a>
+          <span class="correo">{{ f.email }}</span>
+        </td>
+        <td>
+          <span class="titulo-fila">{{ f.titulo }}</span>
+          <span class="correo">{{ f.autores or "Sin autor registrado" }}</span>
+        </td>
+        <td class="num">{{ f.fecha_solicitud|fechahora }}</td>
+        <td>
+          {% if f.estado == 'pendiente' %}
+            <span class="estado neutro">Pendiente</span>
+            <span class="nota-fila">
+              {% if f.copias_disponibles > 0 %}{{ f.copias_disponibles }} {{ "copia disponible" if f.copias_disponibles == 1 else "copias disponibles" }}{% else %}Sin copias disponibles{% endif %}
+            </span>
+          {% elif f.estado == 'aprobada' %}
+            <span class="estado al-dia">Aprobada</span>
+            <span class="nota-fila">Por {{ f.resuelta_por }}, {{ f.fecha_resolucion|fechahora }}</span>
+          {% elif f.estado == 'rechazada' %}
+            <span class="estado retraso">Rechazada</span>
+            <span class="nota-fila">Por {{ f.resuelta_por }}: {{ f.motivo_rechazo }}</span>
+          {% else %}
+            <span class="estado neutro">Cancelada</span>
+            <span class="nota-fila">{{ f.fecha_resolucion|fechahora }}</span>
+          {% endif %}
+        </td>
+        <td class="accion">
+          {% if f.estado == 'pendiente' %}
+          <div class="acciones-fila">
+            {% if f.copias_disponibles > 0 %}
+            <form method="post" action="{{ url_for('aprobar_solicitud', solicitud_id=f.solicitud_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="boton boton-primario">Aprobar</button>
+            </form>
+            {% endif %}
+            <form class="form-linea" method="post" action="{{ url_for('rechazar_solicitud', solicitud_id=f.solicitud_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="sr-only" for="motivo-{{ f.solicitud_id }}">Motivo del rechazo</label>
+              <input id="motivo-{{ f.solicitud_id }}" name="motivo" type="text" placeholder="Motivo del rechazo" required autocomplete="off">
+              <button type="submit" class="boton boton-secundario">Rechazar</button>
+            </form>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ninguna solicitud coincide con la búsqueda. Prueba con otra persona o libro.</p>
+</div>
+{% else %}
+<p class="vacio">Todavía no hay solicitudes. Aparecerán aquí cuando los clientes las envíen desde el catálogo.</p>
+{% endif %}
+{% endblock %}

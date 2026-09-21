@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo autor{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Nuevo autor</h1>
+    <p class="lede">Al guardar, vuelves a la página desde la que llegaste.</p>
+  </div>
+</header>
+
+<form class="formulario formulario-ancho" method="post" action="{{ url_for('crear_autor', volver=volver) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="nombre">Nombre</label>
+      <input id="nombre" name="nombre" type="text" value="{{ datos.nombre }}" required autofocus>
+    </div>
+    <div class="campo">
+      <label for="apellido">Apellido</label>
+      <input id="apellido" name="apellido" type="text" value="{{ datos.apellido }}" required>
+    </div>
+  </div>
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="nacionalidad">Nacionalidad</label>
+      <input id="nacionalidad" name="nacionalidad" type="text" value="{{ datos.nacionalidad }}">
+    </div>
+    <div class="campo">
+      <label for="fecha_nacimiento">Fecha de nacimiento</label>
+      <input id="fecha_nacimiento" name="fecha_nacimiento" type="date" value="{{ datos.fecha_nacimiento }}">
+    </div>
+  </div>
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">Crear autor</button>
+    <a class="boton boton-secundario" href="{{ volver }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

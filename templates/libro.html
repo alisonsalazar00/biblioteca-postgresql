@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ l.titulo }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{{ l.titulo }}</h1>
+    <p class="lede">
+      {% for a in autores %}{{ a.nombre }}{% if not loop.last %}, {% endif %}{% else %}Sin autor registrado{% endfor %}
+    </p>
+  </div>
+  <div class="encabezado-acciones">
+    <a class="boton boton-secundario" href="{{ url_for('editar_libro', libro_id=l.libro_id) }}">Editar libro</a>
+  </div>
+</header>
+
+<dl class="datos">
+  <dt>ISBN</dt>
+  <dd>{{ l.isbn }}</dd>
+
+  <dt>Categoría</dt>
+  <dd>{{ l.categoria }}</dd>
+
+  <dt>Año de publicación</dt>
+  <dd>{{ l.anio_publicacion or "Sin año registrado" }}</dd>
+
+  <dt>Préstamos</dt>
+  <dd>Se ha prestado {{ total_prestamos }} {{ "vez" if total_prestamos == 1 else "veces" }}</dd>
+</dl>
+
+<h2>Copias</h2>
+<form class="form-linea agregar-copias" method="post" action="{{ url_for('agregar_copias', libro_id=l.libro_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label for="cantidad">Agregar copias</label>
+  <input id="cantidad" name="cantidad" type="number" min="1" max="50" value="1" required>
+  <button type="submit" class="boton boton-secundario">Agregar</button>
+</form>
+
+{% if ejemplares %}
+<div class="tabla-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Estado</th>
+        <th>Préstamos</th>
+        <th><span class="sr-only">Cambiar estado</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in ejemplares %}
+      <tr>
+        <td class="num">{{ e.codigo_barras }}</td>
+        <td>
+          {% if e.estado == 'disponible' %}
+          <span class="estado al-dia">{{ estados[e.estado] }}</span>
+          {% elif e.estado == 'prestado' %}
+          <span class="estado neutro">Prestado a {{ e.prestado_a }}</span>
+          {% else %}
+          <span class="estado retraso">{{ estados[e.estado] }}</span>
+          {% endif %}
+        </td>
+        <td class="num">{{ e.total_prestamos }}</td>
+        <td class="accion">
+          {% if e.estado == 'prestado' %}
+          <span class="estado neutro">Registra primero la devolución</span>
+          {% else %}
+          <form class="form-linea" method="post" action="{{ url_for('estado_ejemplar', ejemplar_id=e.ejemplar_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="sr-only" for="estado-{{ e.ejemplar_id }}">Nuevo estado</label>
+            <select id="estado-{{ e.ejemplar_id }}" name="estado">
+              {% for clave in ['disponible', 'en_reparacion', 'perdido'] if clave != e.estado %}
+              <option value="{{ clave }}">{{ estados[clave] }}</option>
+              {% endfor %}
+            </select>
+            <label class="sr-only" for="motivo-{{ e.ejemplar_id }}">Motivo</label>
+            <input id="motivo-{{ e.ejemplar_id }}" name="motivo" type="text" placeholder="Motivo" required autocomplete="off">
+            <button type="submit" class="boton boton-secundario">Cambiar</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="vacio">Este libro todavía no tiene copias. Agrega la primera con el formulario de arriba.</p>
+{% endif %}
+{% endblock %}

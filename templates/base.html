@@ -1,8 +1,8 @@
-{% macro enlace(endpoint, texto, tambien=[]) %}
+{% macro enlace(endpoint, texto, tambien=[], contador=0) %}
 {% set activo = request.endpoint == endpoint or request.endpoint in tambien %}
 <a href="{{ url_for(endpoint) }}"
    class="{{ 'activo' if activo }}"
-   {% if activo %}aria-current="page"{% endif %}>{{ texto }}</a>
+   {% if activo %}aria-current="page"{% endif %}>{{ texto }}{% if contador %}<span class="contador" title="Pendientes de revisión">{{ contador }}</span>{% endif %}</a>
 {% endmacro %}
 <!DOCTYPE html>
 <html lang="es">
@@ -27,16 +27,18 @@
       <nav class="menu" aria-label="Principal">
         {% if session.rol == 'bibliotecario' %}
         {{ enlace('panel', 'Panel') }}
-        {{ enlace('catalogo', 'Catálogo') }}
+        {{ enlace('catalogo', 'Catálogo', ['detalle_libro', 'crear_libro', 'editar_libro', 'crear_autor', 'crear_categoria']) }}
         {{ enlace('prestamos', 'Préstamos') }}
         {{ enlace('vencidos', 'Vencidos') }}
         {{ enlace('multas', 'Multas') }}
         {{ enlace('lista_usuarios', 'Usuarios', ['perfil_usuario', 'crear_usuario', 'editar_usuario']) }}
         {{ enlace('prestar', 'Nuevo préstamo') }}
+        {{ enlace('lista_solicitudes', 'Solicitudes', contador=solicitudes_pendientes) }}
         {{ enlace('auditoria', 'Auditoría') }}
         {% elif session.rol == 'cliente' %}
         {{ enlace('catalogo', 'Catálogo') }}
         {{ enlace('mis_libros', 'Mis libros') }}
+        {{ enlace('mis_solicitudes', 'Mis solicitudes') }}
         {{ enlace('mis_multas', 'Mis multas') }}
         {{ enlace('mi_perfil', 'Mi perfil') }}
         {% endif %}

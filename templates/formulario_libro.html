@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% set titulo_pagina = "Nuevo libro" if modo == "crear" else "Editar libro" %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{{ titulo_pagina }}</h1>
+    <p class="lede">
+      {% if modo == "crear" %}
+        Registra el libro y cuántas copias físicas tiene. Cada copia recibe su código de barras automáticamente.
+      {% else %}
+        Cambia los datos de "{{ libro.titulo }}". Los cambios quedan en el historial.
+      {% endif %}
+    </p>
+  </div>
+</header>
+
+<form class="formulario formulario-ancho" method="post"
+      action="{{ url_for('crear_libro') if modo == 'crear' else url_for('editar_libro', libro_id=libro.libro_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="campo">
+    <label for="titulo">Título</label>
+    <input id="titulo" name="titulo" type="text" value="{{ datos.titulo }}" required autofocus>
+  </div>
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="isbn">ISBN</label>
+      <input id="isbn" name="isbn" type="text" value="{{ datos.isbn }}" placeholder="978-9977-00-000-0" required autocomplete="off">
+      <p class="ayuda">10 o 13 dígitos; se aceptan guiones.</p>
+    </div>
+    <div class="campo">
+      <label for="anio">Año de publicación</label>
+      <input id="anio" name="anio" type="number" min="1000" max="2100" value="{{ datos.anio }}">
+    </div>
+  </div>
+
+  <div class="campo">
+    <label for="categoria_id">Categoría</label>
+    <select id="categoria_id" name="categoria_id" required>
+      <option value="" {% if not datos.categoria_id %}selected{% endif %} disabled>Elige una categoría</option>
+      {% for c in categorias %}
+      <option value="{{ c.categoria_id }}" {% if datos.categoria_id == c.categoria_id %}selected{% endif %}>{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
+    <p class="enlaces-ayuda"><a href="{{ url_for('crear_categoria', volver=request.path) }}">¿Falta una categoría? Agrégala</a></p>
+  </div>
+
+  <fieldset class="campo">
+    <legend>Autores</legend>
+    {% if autores %}
+    <div class="lista-check">
+      {% for a in autores %}
+      <label>
+        <input type="checkbox" name="autores" value="{{ a.autor_id }}" {% if a.autor_id in datos.autores %}checked{% endif %}>
+        {{ a.nombre }}
+      </label>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="ayuda">Todavía no hay autores registrados.</p>
+    {% endif %}
+    <p class="enlaces-ayuda"><a href="{{ url_for('crear_autor', volver=request.path) }}">¿Falta un autor? Agrégalo</a></p>
+  </fieldset>
+
+  {% if modo == "crear" %}
+  <div class="campo">
+    <label for="copias">Copias iniciales</label>
+    <input id="copias" name="copias" type="number" min="0" max="50" value="{{ datos.copias }}" style="max-width: 120px;">
+    <p class="ayuda">Puedes agregar más copias después desde la página del libro.</p>
+  </div>
+  {% endif %}
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">{{ "Crear libro" if modo == "crear" else "Guardar cambios" }}</button>
+    <a class="boton boton-secundario"
+       href="{{ url_for('catalogo') if modo == 'crear' else url_for('detalle_libro', libro_id=libro.libro_id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
