@@ -43,7 +43,12 @@
       <tr>
         <td class="titulo">{{ f.titulo }}</td>
         <td>
+          {% set uid = ids_usuarios.get(f.email) %}
+          {% if uid %}
+          <a class="enlace-fila" href="{{ url_for('perfil_usuario', usuario_id=uid) }}">{{ f.usuario }}</a>
+          {% else %}
           <span class="usuario">{{ f.usuario }}</span>
+          {% endif %}
           <span class="correo">{{ f.email }}</span>
         </td>
         <td class="num">{{ f.codigo_barras }}</td>

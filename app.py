@@ -51,6 +51,12 @@ def formato_colones(monto):
     return "₡" + f"{monto:,.0f}".replace(",", " ")
 
 
+@app.template_filter("fechahora")
+def formato_fechahora(valor):
+    """Muestra una fecha y hora como día/mes/año hora:minutos."""
+    return valor.strftime("%d/%m/%Y %H:%M") if valor else ""
+
+
 # ---------------------------------------------------------------------------
 # Seguridad: CSRF, permisos y caché
 # ---------------------------------------------------------------------------
@@ -244,6 +250,11 @@ def catalogo():
 # ---------------------------------------------------------------------------
 # Préstamos y multas (solo bibliotecario)
 # ---------------------------------------------------------------------------
+def ids_por_correo():
+    """Correo -> usuario_id, para enlazar cada fila con el perfil del usuario."""
+    return {f["email"]: f["usuario_id"] for f in query("SELECT usuario_id, email FROM usuarios")}
+
+
 @app.route("/prestamos")
 @acceso("bibliotecario")
 def prestamos():
@@ -253,7 +264,11 @@ def prestamos():
     )
     n_vencidos = sum(1 for f in filas if f["dias_retraso"] > 0)
     return render_template(
-        "prestamos.html", filas=filas, n_vencidos=n_vencidos, solo_vencidos=False
+        "prestamos.html",
+        filas=filas,
+        n_vencidos=n_vencidos,
+        solo_vencidos=False,
+        ids_usuarios=ids_por_correo(),
     )
 
 
@@ -263,7 +278,9 @@ def vencidos():
     filas = query(
         "SELECT * FROM v_prestamos_vencidos ORDER BY dias_retraso DESC, prestamo_id"
     )
-    return render_template("prestamos.html", filas=filas, solo_vencidos=True)
+    return render_template(
+        "prestamos.html", filas=filas, solo_vencidos=True, ids_usuarios=ids_por_correo()
+    )
 
 
 @app.route("/prestar", methods=["GET", "POST"])
@@ -330,6 +347,9 @@ def devolver(prestamo_id):
             flash("Devolución registrada. El libro se entregó a tiempo.", "exito")
 
     # Vuelve a la página desde la que se hizo clic
+    usuario_id = request.form.get("usuario_id", type=int)
+    if usuario_id:
+        return redirect(url_for("perfil_usuario", usuario_id=usuario_id))
     destino = "vencidos" if request.form.get("volver") == "vencidos" else "prestamos"
     return redirect(url_for(destino))
 
@@ -361,6 +381,188 @@ def pagar_multa(multa_id):
     else:
         flash(f"Pago registrado: {formato_colones(fila['monto'])}.", "exito")
     return redirect(url_for("multas"))
+
+
+# ---------------------------------------------------------------------------
+# Usuarios (solo bibliotecario)
+# ---------------------------------------------------------------------------
+PROVINCIAS = ["San José", "Alajuela", "Cartago", "Heredia", "Guanacaste", "Puntarenas", "Limón"]
+CAMPOS_USUARIO = ("nombre", "apellido", "email", "telefono", "provincia", "canton", "distrito", "direccion")
+
+
+def contrasena_temporal():
+    """Genera una contraseña aleatoria de 10 caracteres, sin letras que se confundan."""
+    alfabeto = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        clave = "".join(secrets.choice(alfabeto) for _ in range(10))
+        if any(c.isdigit() for c in clave) and any(c.isalpha() for c in clave):
+            return clave
+
+
+def mensaje_error(error):
+    """Mensaje para mostrar cuando la base de datos rechaza un cambio."""
+    if isinstance(error, psycopg.errors.RaiseException):
+        return error.diag.message_primary
+    return "No se pudo guardar: los datos no cumplen las reglas de la base de datos."
+
+
+def leer_datos_usuario():
+    return {campo: request.form.get(campo, "").strip() for campo in CAMPOS_USUARIO}
+
+
+@app.route("/usuarios")
+@acceso("bibliotecario")
+def lista_usuarios():
+    filas = query("SELECT * FROM v_usuarios_resumen ORDER BY apellido, nombre")
+    n_activos = sum(1 for f in filas if f["activo"])
+
+    # Libros que cada usuario tiene en su poder ahora mismo
+    prestados = {}
+    en_curso = query(
+        """
+        SELECT usuario_id, titulo, estado
+        FROM v_historial_usuario
+        WHERE estado IN ('Activo', 'Vencido')
+        ORDER BY fecha_vencimiento, prestamo_id
+        """
+    )
+    for p in en_curso:
+        prestados.setdefault(p["usuario_id"], []).append(p)
+
+    return render_template(
+        "usuarios.html", filas=filas, n_activos=n_activos, prestados=prestados
+    )
+
+
+@app.route("/usuarios/nuevo", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def crear_usuario():
+    datos = {campo: "" for campo in CAMPOS_USUARIO}
+
+    if request.method == "POST":
+        datos = leer_datos_usuario()
+        clave = contrasena_temporal()
+        try:
+            # Crea el usuario y su cuenta en una sola transacción
+            fila = call(
+                "SELECT crear_usuario_con_cuenta(%s, %s, %s, %s, %s, %s, %s, %s, %s) AS usuario_id",
+                (
+                    datos["nombre"], datos["apellido"], datos["email"], clave,
+                    datos["telefono"], datos["provincia"], datos["canton"],
+                    datos["distrito"], datos["direccion"],
+                ),
+            )
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            flash(
+                f"Usuario creado. Contraseña temporal: {clave}. "
+                "Compártela con la persona; se muestra una sola vez.",
+                "exito",
+            )
+            return redirect(url_for("perfil_usuario", usuario_id=fila["usuario_id"]))
+
+    return render_template(
+        "formulario_usuario.html", modo="crear", datos=datos, provincias=PROVINCIAS
+    )
+
+
+@app.route("/usuarios/<int:usuario_id>")
+@acceso("bibliotecario")
+def perfil_usuario(usuario_id):
+    filas = query("SELECT * FROM v_usuarios_resumen WHERE usuario_id = %s", (usuario_id,))
+    if not filas:
+        abort(404)
+    historial = query(
+        """
+        SELECT * FROM v_historial_usuario
+        WHERE usuario_id = %s
+        ORDER BY fecha_prestamo DESC, prestamo_id DESC
+        """,
+        (usuario_id,),
+    )
+    # v_cuentas nunca incluye la contraseña
+    cuentas = query("SELECT * FROM v_cuentas WHERE usuario_id = %s", (usuario_id,))
+    prestados = [h for h in historial if h["estado"] in ("Activo", "Vencido")]
+    return render_template(
+        "perfil_usuario.html",
+        u=filas[0],
+        historial=historial,
+        prestados=prestados,
+        cuenta=cuentas[0] if cuentas else None,
+    )
+
+
+@app.route("/usuarios/<int:usuario_id>/editar", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def editar_usuario(usuario_id):
+    filas = query("SELECT * FROM v_usuarios_resumen WHERE usuario_id = %s", (usuario_id,))
+    if not filas:
+        abort(404)
+    u = filas[0]
+
+    if request.method == "POST":
+        datos = leer_datos_usuario()
+        datos["activo"] = request.form.get("activo") == "on"
+        try:
+            call(
+                "SELECT editar_usuario(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    usuario_id, datos["nombre"], datos["apellido"], datos["email"],
+                    datos["telefono"], datos["provincia"], datos["canton"],
+                    datos["distrito"], datos["direccion"], datos["activo"],
+                ),
+            )
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            flash("Usuario actualizado.", "exito")
+            return redirect(url_for("perfil_usuario", usuario_id=usuario_id))
+    else:
+        datos = {
+            "nombre": u["nombre"],
+            "apellido": u["apellido"],
+            "email": u["email"],
+            "telefono": u["telefono"] or "",
+            "provincia": u["provincia"] or "",
+            "canton": u["canton"] or "",
+            "distrito": u["distrito"] or "",
+            "direccion": u["direccion_exacta"] or "",
+            "activo": u["activo"],
+        }
+
+    return render_template(
+        "formulario_usuario.html",
+        modo="editar",
+        u=u,
+        datos=datos,
+        provincias=PROVINCIAS,
+    )
+
+
+@app.route("/usuarios/<int:usuario_id>/restablecer", methods=["POST"])
+@acceso("bibliotecario")
+def restablecer_contrasena(usuario_id):
+    cuentas = query("SELECT cuenta_id FROM v_cuentas WHERE usuario_id = %s", (usuario_id,))
+    if not cuentas:
+        flash("Este usuario no tiene una cuenta de acceso.", "error")
+        return redirect(url_for("perfil_usuario", usuario_id=usuario_id))
+
+    # El bibliotecario nunca elige ni ve la contraseña anterior: se genera una nueva
+    clave = contrasena_temporal()
+    try:
+        call(
+            "SELECT restablecer_contrasena(%s, %s)", (cuentas[0]["cuenta_id"], clave)
+        )
+    except psycopg.errors.RaiseException as error:
+        flash(mensaje_error(error), "error")
+    else:
+        flash(
+            f"Contraseña restablecida. Nueva contraseña temporal: {clave}. "
+            "Compártela con la persona; se muestra una sola vez.",
+            "exito",
+        )
+    return redirect(url_for("perfil_usuario", usuario_id=usuario_id))
 
 
 if __name__ == "__main__":

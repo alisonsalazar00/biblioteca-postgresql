@@ -562,3 +562,128 @@ td.accion { text-align: right; }
   color: var(--tinta);
   font-weight: 500;
 }
+
+/* ---------- Usuarios ---------- */
+a.boton {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.encabezado-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.enlace-fila {
+  display: block;
+  color: var(--texto);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.enlace-fila:hover { text-decoration: underline; }
+
+.titulo-fila {
+  display: block;
+  font-family: var(--fuente-titulo);
+  font-weight: 500;
+}
+
+.estado.neutro { color: var(--texto-suave); }
+
+h2 {
+  margin: 0 0 12px;
+  font-family: var(--fuente-titulo);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.cifras {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 0 32px;
+  overflow: hidden;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+}
+
+.cifra {
+  display: flex;
+  flex: 1 1 150px;
+  flex-direction: column-reverse;
+  padding: 16px 20px;
+  border-right: 1px solid var(--borde);
+}
+
+.cifra:last-child { border-right: none; }
+
+.cifra-valor {
+  margin: 0;
+  font-family: var(--fuente-titulo);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cifra-etiqueta {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+}
+
+.datos {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px 24px;
+  margin: 0 0 32px;
+  padding: 20px 24px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+}
+
+.datos dt { color: var(--texto-suave); }
+.datos dd { margin: 0; }
+
+.formulario-ancho { max-width: 720px; }
+
+.fila-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.campo textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.campo textarea:focus-visible {
+  outline: 2px solid var(--tinta-clara);
+  outline-offset: 1px;
+}
+
+.campo-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.campo-check input {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 640px) {
+  .fila-campos { grid-template-columns: 1fr; }
+  .datos { grid-template-columns: 1fr; gap: 2px; }
+  .datos dd { margin-bottom: 12px; }
+}

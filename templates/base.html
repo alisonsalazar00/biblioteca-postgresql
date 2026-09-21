@@ -1,7 +1,8 @@
-{% macro enlace(endpoint, texto) %}
+{% macro enlace(endpoint, texto, tambien=[]) %}
+{% set activo = request.endpoint == endpoint or request.endpoint in tambien %}
 <a href="{{ url_for(endpoint) }}"
-   class="{{ 'activo' if request.endpoint == endpoint }}"
-   {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>{{ texto }}</a>
+   class="{{ 'activo' if activo }}"
+   {% if activo %}aria-current="page"{% endif %}>{{ texto }}</a>
 {% endmacro %}
 <!DOCTYPE html>
 <html lang="es">
@@ -29,6 +30,7 @@
         {{ enlace('prestamos', 'Préstamos') }}
         {{ enlace('vencidos', 'Vencidos') }}
         {{ enlace('multas', 'Multas') }}
+        {{ enlace('lista_usuarios', 'Usuarios', ['perfil_usuario', 'crear_usuario', 'editar_usuario']) }}
         {{ enlace('prestar', 'Nuevo préstamo') }}
         {% endif %}
       </nav>

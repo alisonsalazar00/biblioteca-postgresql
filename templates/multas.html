@@ -41,7 +41,7 @@
       {% for f in filas %}
       <tr>
         <td>
-          <span class="usuario">{{ f.usuario }}</span>
+          <a class="enlace-fila" href="{{ url_for('perfil_usuario', usuario_id=f.usuario_id) }}">{{ f.usuario }}</a>
           <span class="correo">{{ f.email }}</span>
         </td>
         <td class="titulo">{{ f.titulo }}</td>

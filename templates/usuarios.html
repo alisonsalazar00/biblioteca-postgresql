@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Usuarios</h1>
+    <p class="lede">
+      {{ filas|length }} {{ "usuario registrado" if filas|length == 1 else "usuarios registrados" }},
+      {{ n_activos }} {{ "activo" if n_activos == 1 else "activos" }}.
+    </p>
+  </div>
+  <div class="encabezado-acciones">
+    {% if filas %}
+    <div class="busqueda">
+      <label for="buscar" class="sr-only">Buscar usuarios</label>
+      <input id="buscar" type="search" placeholder="Buscar por nombre, correo, lugar o libro" autocomplete="off">
+    </div>
+    {% endif %}
+    <a class="boton boton-primario" href="{{ url_for('crear_usuario') }}">Nuevo usuario</a>
+  </div>
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table id="tabla-usuarios" data-filtrable>
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th>Ubicación</th>
+        <th>Préstamos</th>
+        <th>Prestados ahora</th>
+        <th>Multas</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>
+          <a class="enlace-fila" href="{{ url_for('perfil_usuario', usuario_id=f.usuario_id) }}">{{ f.nombre_completo }}</a>
+          <span class="correo">{{ f.email }}</span>
+        </td>
+        <td>
+          {% if f.canton %}{{ f.canton }}, {{ f.provincia }}{% else %}Sin dirección registrada{% endif %}
+        </td>
+        <td class="num">{{ f.total_prestamos }}</td>
+        <td>
+          {% for p in prestados.get(f.usuario_id, []) %}
+          <div>
+            {{ p.titulo }}
+            {% if p.estado == 'Vencido' %}<span class="estado retraso">Vencido</span>{% endif %}
+          </div>
+          {% else %}
+          <span class="estado neutro">Ninguno</span>
+          {% endfor %}
+        </td>
+        <td>
+          {% if f.multas_pendientes %}
+          <span class="estado retraso">Debe {{ f.monto_pendiente|colones }}</span>
+          {% else %}
+          <span class="estado neutro">Sin multas</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if f.activo %}
+          <span class="estado al-dia">Activo</span>
+          {% else %}
+          <span class="estado neutro">Inactivo</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ningún usuario coincide con la búsqueda. Prueba con otro nombre, correo, lugar o libro.</p>
+</div>
+{% else %}
+<p class="vacio">Todavía no hay usuarios registrados. Crea el primero con el botón "Nuevo usuario".</p>
+{% endif %}
+{% endblock %}

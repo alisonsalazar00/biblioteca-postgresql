@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% set titulo_pagina = "Nuevo usuario" if modo == "crear" else "Editar usuario" %}
+
+{% block title %}{{ titulo_pagina }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>{{ titulo_pagina }}</h1>
+    <p class="lede">
+      {% if modo == "crear" %}
+        Al guardar se crea también su cuenta de acceso, con una contraseña temporal que verás una sola vez.
+      {% else %}
+        Cambia los datos de {{ u.nombre_completo }}. El correo es también su nombre de acceso.
+      {% endif %}
+    </p>
+  </div>
+</header>
+
+<form class="formulario formulario-ancho" method="post"
+      action="{{ url_for('crear_usuario') if modo == 'crear' else url_for('editar_usuario', usuario_id=u.usuario_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="nombre">Nombre</label>
+      <input id="nombre" name="nombre" type="text" value="{{ datos.nombre }}" required autofocus>
+    </div>
+    <div class="campo">
+      <label for="apellido">Apellido</label>
+      <input id="apellido" name="apellido" type="text" value="{{ datos.apellido }}" required>
+    </div>
+  </div>
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="email">Correo</label>
+      <input id="email" name="email" type="email" value="{{ datos.email }}" required>
+    </div>
+    <div class="campo">
+      <label for="telefono">Teléfono</label>
+      <input id="telefono" name="telefono" type="tel" value="{{ datos.telefono }}" placeholder="8812-3456" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="fila-campos">
+    <div class="campo">
+      <label for="provincia">Provincia</label>
+      <select id="provincia" name="provincia">
+        <option value="" {% if not datos.provincia %}selected{% endif %}>Sin especificar</option>
+        {% for p in provincias %}
+        <option value="{{ p }}" {% if datos.provincia == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="campo">
+      <label for="canton">Cantón</label>
+      <input id="canton" name="canton" type="text" value="{{ datos.canton }}">
+    </div>
+  </div>
+
+  <div class="campo">
+    <label for="distrito">Distrito</label>
+    <input id="distrito" name="distrito" type="text" value="{{ datos.distrito }}">
+  </div>
+
+  <div class="campo">
+    <label for="direccion">Señas exactas</label>
+    <textarea id="direccion" name="direccion" rows="3">{{ datos.direccion }}</textarea>
+  </div>
+
+  {% if modo == "editar" %}
+  <div class="campo">
+    <label class="campo-check">
+      <input type="checkbox" name="activo" {% if datos.activo %}checked{% endif %}>
+      Usuario activo
+    </label>
+    <p class="ayuda">Un usuario inactivo no puede iniciar sesión ni pedir libros. No se puede desactivar a quien tiene préstamos activos.</p>
+  </div>
+  {% endif %}
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">{{ "Crear usuario" if modo == "crear" else "Guardar cambios" }}</button>
+    <a class="boton boton-secundario"
+       href="{{ url_for('lista_usuarios') if modo == 'crear' else url_for('perfil_usuario', usuario_id=u.usuario_id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
