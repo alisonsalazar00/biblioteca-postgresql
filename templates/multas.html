@@ -56,7 +56,9 @@
           {% endif %}
         </td>
         <td class="accion">
-          {% if not f.pagada %}
+          {% if f.pagada %}
+          <a class="boton boton-secundario" href="{{ url_for('anular_pago', multa_id=f.multa_id) }}">Anular pago</a>
+          {% else %}
           <form method="post" action="{{ url_for('pagar_multa', multa_id=f.multa_id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="boton boton-secundario">Registrar pago</button>

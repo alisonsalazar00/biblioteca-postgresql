@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoría{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Auditoría</h1>
+    <p class="lede">
+      {% if filas %}
+        Los últimos {{ filas|length }} {{ "cambio registrado" if filas|length == 1 else "cambios registrados" }}{% if evento %} de tipo "{{ evento }}"{% endif %}.
+        El historial no se puede modificar ni borrar.
+      {% else %}
+        Todavía no hay cambios registrados{% if evento %} de tipo "{{ evento }}"{% endif %}.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="filtro-auditoria">
+    <form method="get" action="{{ url_for('auditoria') }}" class="filtro-auditoria">
+      <div class="campo">
+        <label for="evento" class="sr-only">Tipo de evento</label>
+        <select id="evento" name="evento" class="compacto">
+          <option value="">Todos los eventos</option>
+          {% for e in eventos %}
+          <option value="{{ e }}" {% if e == evento %}selected{% endif %}>{{ e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="boton boton-secundario">Filtrar</button>
+    </form>
+    {% if filas %}
+    <div class="busqueda">
+      <label for="buscar" class="sr-only">Buscar en el historial</label>
+      <input id="buscar" type="search" placeholder="Buscar por persona, libro o motivo" autocomplete="off">
+    </div>
+    {% endif %}
+  </div>
+</header>
+
+{% if filas %}
+<div class="tabla-wrap">
+  <table id="tabla-auditoria" data-filtrable>
+    <thead>
+      <tr>
+        <th>Fecha y hora</th>
+        <th>Evento</th>
+        <th>Responsable</th>
+        <th>Afecta a</th>
+        <th>Qué cambió</th>
+        <th>Motivo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td class="num">{{ f.fecha_hora|fechahora }}</td>
+        <td>
+          {% if f.evento in ('Préstamo corregido', 'Pago de multa anulado', 'Usuario desactivado') %}
+          <span class="estado retraso">{{ f.evento }}</span>
+          {% else %}
+          {{ f.evento }}
+          {% endif %}
+        </td>
+        <td>{{ f.responsable }}</td>
+        <td>
+          {% if f.usuario %}<span class="usuario">{{ f.usuario }}</span>{% endif %}
+          {% if f.libro %}<span class="correo">{{ f.libro }}</span>{% endif %}
+        </td>
+        <td>
+          {% for linea in f.detalle %}
+          <span class="detalle-linea">{{ linea }}</span>
+          {% else %}
+          <span class="estado neutro">Sin detalle</span>
+          {% endfor %}
+        </td>
+        <td>{{ f.motivo or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="sin-resultados" class="vacio" hidden>Ningún cambio coincide con la búsqueda. Prueba con otra persona, libro o motivo.</p>
+</div>
+{% else %}
+<p class="vacio">No hay cambios para mostrar.</p>
+{% endif %}
+{% endblock %}

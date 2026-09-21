@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Corregir préstamo{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Corregir préstamo</h1>
+    <p class="lede">
+      Úsalo cuando el préstamo se registró a otra persona o con otra copia. Las fechas no cambian,
+      y la corrección queda en el historial con tu nombre y el motivo.
+    </p>
+  </div>
+</header>
+
+<div class="resumen-fila formulario-ancho">
+  <p><strong>{{ p.titulo }}</strong> ({{ p.codigo_barras }})</p>
+  <p class="ayuda">
+    Registrado a {{ p.usuario }}, prestado el {{ p.fecha_prestamo|fecha }}, vence el {{ p.fecha_vencimiento|fecha }}.
+  </p>
+</div>
+
+<form class="formulario formulario-ancho" method="post"
+      action="{{ url_for('corregir_prestamo', prestamo_id=p.prestamo_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="campo">
+    <label for="usuario_id">Usuario</label>
+    <select id="usuario_id" name="usuario_id" required>
+      {% for u in usuarios %}
+      <option value="{{ u.usuario_id }}" {% if u.usuario_id == seleccion.usuario_id %}selected{% endif %}>
+        {{ u.nombre }} ({{ u.email }}){% if u.usuario_id == p.usuario_id %} - actual{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="campo">
+    <label for="ejemplar_id">Ejemplar</label>
+    <select id="ejemplar_id" name="ejemplar_id" required>
+      {% for e in ejemplares %}
+      <option value="{{ e.ejemplar_id }}" {% if e.ejemplar_id == seleccion.ejemplar_id %}selected{% endif %}>
+        {{ e.titulo }} ({{ e.codigo_barras }}){% if e.ejemplar_id == p.ejemplar_id %} - actual{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <p class="ayuda">Además del ejemplar actual, solo aparecen las copias disponibles.</p>
+  </div>
+
+  <div class="campo">
+    <label for="motivo">Motivo de la corrección</label>
+    <textarea id="motivo" name="motivo" rows="3" required
+              placeholder="Por ejemplo: se registró a otra persona por error">{{ seleccion.motivo }}</textarea>
+  </div>
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">Guardar corrección</button>
+    <a class="boton boton-secundario" href="{{ url_for('prestamos') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

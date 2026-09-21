@@ -687,3 +687,35 @@ h2 {
   .datos { grid-template-columns: 1fr; gap: 2px; }
   .datos dd { margin-bottom: 12px; }
 }
+
+/* ---------- Acciones en filas y auditoría ---------- */
+.acciones-fila {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.detalle-linea { display: block; }
+
+.filtro-auditoria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.campo select.compacto {
+  padding: 8px 12px;
+}
+
+.resumen-fila {
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie);
+}
+
+.resumen-fila p { margin: 0; }
+.resumen-fila p + p { margin-top: 4px; }

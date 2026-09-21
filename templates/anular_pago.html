@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Anular pago{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Anular pago de multa</h1>
+    <p class="lede">
+      Úsalo cuando un pago se registró por error. La multa vuelve a estar pendiente, y el cambio
+      queda en el historial con tu nombre y el motivo.
+    </p>
+  </div>
+</header>
+
+<div class="resumen-fila formulario-ancho">
+  <p><strong>{{ m.usuario }}</strong>, {{ m.titulo }}</p>
+  <p class="ayuda">
+    Multa de {{ m.monto|colones }} por {{ m.dias_retraso|dias }} de retraso,
+    pagada el {{ m.fecha_pago|fecha }}.
+  </p>
+</div>
+
+<form class="formulario formulario-ancho" method="post"
+      action="{{ url_for('anular_pago', multa_id=m.multa_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="campo">
+    <label for="motivo">Motivo</label>
+    <textarea id="motivo" name="motivo" rows="3" required autofocus
+              placeholder="Por ejemplo: el pago se registró por error, la persona no había pagado">{{ motivo }}</textarea>
+  </div>
+
+  <div class="encabezado-acciones">
+    <button type="submit" class="boton boton-primario">Anular pago</button>
+    <a class="boton boton-secundario" href="{{ url_for('multas') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

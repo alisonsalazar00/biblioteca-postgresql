@@ -32,6 +32,7 @@
         {{ enlace('multas', 'Multas') }}
         {{ enlace('lista_usuarios', 'Usuarios', ['perfil_usuario', 'crear_usuario', 'editar_usuario']) }}
         {{ enlace('prestar', 'Nuevo préstamo') }}
+        {{ enlace('auditoria', 'Auditoría') }}
         {% elif session.rol == 'cliente' %}
         {{ enlace('mis_libros', 'Mis libros') }}
         {{ enlace('mis_multas', 'Mis multas') }}

@@ -1,7 +1,8 @@
 """Aplicación web de la biblioteca (Flask)."""
 import os
+import re
 import secrets
-from datetime import timedelta
+from datetime import timedelta, timezone
 from functools import wraps
 
 import psycopg
@@ -62,10 +63,19 @@ def formato_colones(monto):
     return "₡" + f"{monto:,.0f}".replace(",", " ")
 
 
+# Costa Rica no usa horario de verano, así que un desfase fijo de -6 horas basta
+# y no depende de la base de datos de zonas horarias del sistema.
+ZONA_LOCAL = timezone(timedelta(hours=-6))
+
+
 @app.template_filter("fechahora")
 def formato_fechahora(valor):
-    """Muestra una fecha y hora como día/mes/año hora:minutos."""
-    return valor.strftime("%d/%m/%Y %H:%M") if valor else ""
+    """Muestra una fecha y hora (en hora de Costa Rica) como día/mes/año hora:minutos."""
+    if not valor:
+        return ""
+    if valor.tzinfo is not None:
+        valor = valor.astimezone(ZONA_LOCAL)
+    return valor.strftime("%d/%m/%Y %H:%M")
 
 
 # ---------------------------------------------------------------------------
@@ -645,6 +655,195 @@ def mi_perfil():
     if not resumen:
         abort(404)
     return render_template("mi_perfil.html", u=resumen[0])
+
+
+# ---------------------------------------------------------------------------
+# Correcciones y auditoría (solo bibliotecario)
+# ---------------------------------------------------------------------------
+ETIQUETAS_CAMPOS = {
+    "nombre": "Nombre",
+    "apellido": "Apellido",
+    "email": "Correo",
+    "telefono": "Teléfono",
+    "provincia": "Provincia",
+    "canton": "Cantón",
+    "distrito": "Distrito",
+    "direccion_exacta": "Señas",
+    "activo": "Activo",
+    "fecha_devolucion": "Fecha de devolución",
+    "pagada": "Pagada",
+    "fecha_pago": "Fecha de pago",
+}
+
+
+def _valor_auditoria(valor):
+    """Escribe un valor guardado en el historial de forma legible."""
+    if valor is None or valor == "":
+        return "vacío"
+    if isinstance(valor, bool):
+        return "Sí" if valor else "No"
+    if isinstance(valor, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
+        return f"{valor[8:10]}/{valor[5:7]}/{valor[0:4]}"
+    return str(valor)
+
+
+def detalle_auditoria(f):
+    """Convierte un registro del historial en líneas de texto: qué cambió."""
+    antes = f["datos_anteriores"] or {}
+    despues = f["datos_nuevos"] or {}
+    evento = f["evento"]
+    lineas = []
+
+    if evento == "Préstamo corregido":
+        if f["usuario_anterior"] and f["usuario_nuevo"] and f["usuario_anterior"] != f["usuario_nuevo"]:
+            lineas.append(f"Usuario: {f['usuario_anterior']} → {f['usuario_nuevo']}")
+        if f["ejemplar_anterior"] and f["ejemplar_nuevo"] and f["ejemplar_anterior"] != f["ejemplar_nuevo"]:
+            lineas.append(f"Ejemplar: {f['ejemplar_anterior']} → {f['ejemplar_nuevo']}")
+    elif evento == "Préstamo registrado":
+        lineas.append(f"Vence el {_valor_auditoria(despues.get('fecha_vencimiento'))}")
+    elif evento == "Devolución registrada":
+        lineas.append(f"Devuelto el {_valor_auditoria(despues.get('fecha_devolucion'))}")
+    elif evento == "Multa generada":
+        retraso = formato_dias(despues.get("dias_retraso", 0))
+        lineas.append(f"{retraso} de retraso, {formato_colones(despues.get('monto', 0))}")
+    elif evento == "Multa pagada":
+        lineas.append(f"Pagada el {_valor_auditoria(despues.get('fecha_pago'))}")
+    elif evento == "Pago de multa anulado":
+        lineas.append("De pagada a pendiente")
+    elif evento == "Usuario creado":
+        lineas.append(f"Correo: {despues.get('email', '')}")
+    elif f["operacion"] == "UPDATE":
+        for campo, nuevo in despues.items():
+            etiqueta = ETIQUETAS_CAMPOS.get(campo, campo)
+            lineas.append(f"{etiqueta}: {_valor_auditoria(antes.get(campo))} → {_valor_auditoria(nuevo)}")
+    return lineas
+
+
+@app.route("/auditoria")
+@acceso("bibliotecario")
+def auditoria():
+    eventos = [f["evento"] for f in query("SELECT DISTINCT evento FROM v_auditoria ORDER BY evento")]
+    evento = request.args.get("evento", "").strip()
+
+    # Solo se filtra por eventos que existen; cualquier otro valor se ignora
+    if evento in eventos:
+        filas = query(
+            "SELECT * FROM v_auditoria WHERE evento = %s ORDER BY auditoria_id DESC LIMIT 300",
+            (evento,),
+        )
+    else:
+        evento = ""
+        filas = query("SELECT * FROM v_auditoria ORDER BY auditoria_id DESC LIMIT 300")
+
+    for f in filas:
+        f["detalle"] = detalle_auditoria(f)
+
+    return render_template(
+        "auditoria.html", filas=filas, eventos=eventos, evento=evento
+    )
+
+
+@app.route("/prestamos/<int:prestamo_id>/corregir", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def corregir_prestamo(prestamo_id):
+    filas = query(
+        """
+        SELECT p.prestamo_id, p.usuario_id, p.ejemplar_id, p.fecha_prestamo,
+               p.fecha_vencimiento, p.fecha_devolucion,
+               u.nombre || ' ' || u.apellido AS usuario,
+               e.codigo_barras, l.titulo
+        FROM prestamos p
+        JOIN usuarios   u ON u.usuario_id  = p.usuario_id
+        JOIN ejemplares e ON e.ejemplar_id = p.ejemplar_id
+        JOIN libros     l ON l.libro_id    = e.libro_id
+        WHERE p.prestamo_id = %s
+        """,
+        (prestamo_id,),
+    )
+    if not filas:
+        abort(404)
+    p = filas[0]
+
+    if p["fecha_devolucion"] is not None:
+        flash("Este préstamo ya fue devuelto y no se puede corregir.", "error")
+        return redirect(url_for("prestamos"))
+
+    seleccion = {"usuario_id": p["usuario_id"], "ejemplar_id": p["ejemplar_id"], "motivo": ""}
+
+    if request.method == "POST":
+        try:
+            seleccion = {
+                "usuario_id": int(request.form["usuario_id"]),
+                "ejemplar_id": int(request.form["ejemplar_id"]),
+                "motivo": request.form.get("motivo", "").strip(),
+            }
+        except (KeyError, ValueError):
+            flash("Elige un usuario y un ejemplar.", "error")
+        else:
+            try:
+                call(
+                    "SELECT corregir_prestamo(%s, %s, %s, %s)",
+                    (prestamo_id, seleccion["usuario_id"], seleccion["ejemplar_id"], seleccion["motivo"]),
+                )
+            except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+                flash(mensaje_error(error), "error")
+            else:
+                flash("Préstamo corregido. El cambio quedó registrado en el historial.", "exito")
+                return redirect(url_for("prestamos"))
+
+    # Se incluyen el usuario y el ejemplar actuales aunque ya no cumplan las
+    # condiciones normales (por ejemplo, el ejemplar que hoy figura como prestado).
+    usuarios = query(
+        """
+        SELECT usuario_id, nombre || ' ' || apellido AS nombre, email
+        FROM usuarios
+        WHERE activo OR usuario_id = %s
+        ORDER BY apellido, nombre
+        """,
+        (p["usuario_id"],),
+    )
+    ejemplares = query(
+        """
+        SELECT e.ejemplar_id, e.codigo_barras, l.titulo
+        FROM ejemplares e
+        JOIN libros l ON l.libro_id = e.libro_id
+        WHERE e.estado = 'disponible' OR e.ejemplar_id = %s
+        ORDER BY l.titulo, e.codigo_barras
+        """,
+        (p["ejemplar_id"],),
+    )
+    return render_template(
+        "corregir_prestamo.html", p=p, usuarios=usuarios, ejemplares=ejemplares, seleccion=seleccion
+    )
+
+
+@app.route("/multas/<int:multa_id>/anular", methods=["GET", "POST"])
+@acceso("bibliotecario")
+def anular_pago(multa_id):
+    filas = query("SELECT * FROM v_multas WHERE multa_id = %s", (multa_id,))
+    if not filas:
+        abort(404)
+    multa = filas[0]
+
+    if not multa["pagada"]:
+        flash("Esta multa no está pagada, no hay un pago que anular.", "error")
+        return redirect(url_for("multas"))
+
+    motivo = ""
+    if request.method == "POST":
+        motivo = request.form.get("motivo", "").strip()
+        try:
+            call("SELECT anular_pago_multa(%s, %s)", (multa_id, motivo))
+        except (psycopg.errors.RaiseException, psycopg.errors.IntegrityError) as error:
+            flash(mensaje_error(error), "error")
+        else:
+            flash(
+                "Pago anulado. La multa volvió a estar pendiente y el cambio quedó registrado.",
+                "exito",
+            )
+            return redirect(url_for("multas"))
+
+    return render_template("anular_pago.html", m=multa, motivo=motivo)
 
 
 if __name__ == "__main__":

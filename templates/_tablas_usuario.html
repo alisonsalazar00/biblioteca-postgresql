@@ -33,11 +33,14 @@
         </td>
         {% if usuario_id %}
         <td class="accion">
-          <form method="post" action="{{ url_for('devolver', prestamo_id=p.prestamo_id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="usuario_id" value="{{ usuario_id }}">
-            <button type="submit" class="boton boton-secundario">Registrar devolución</button>
-          </form>
+          <div class="acciones-fila">
+            <a class="boton boton-secundario" href="{{ url_for('corregir_prestamo', prestamo_id=p.prestamo_id) }}">Corregir</a>
+            <form method="post" action="{{ url_for('devolver', prestamo_id=p.prestamo_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="usuario_id" value="{{ usuario_id }}">
+              <button type="submit" class="boton boton-secundario">Registrar devolución</button>
+            </form>
+          </div>
         </td>
         {% endif %}
       </tr>
